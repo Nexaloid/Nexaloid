@@ -1,0 +1,8 @@
+.zig-cache/
+zig-out/
+bindings/node/build/
+bindings/rust/**/target/
+**/__pycache__/
+*.pyc
+*.pdb
+*.exe
