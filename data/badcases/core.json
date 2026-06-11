@@ -1,0 +1,50 @@
+[
+  {
+    "id": "classic_001",
+    "text": "南京市长江大桥",
+    "expected": ["南京市", "长江大桥"],
+    "tags": ["classic", "ambiguity"]
+  },
+  {
+    "id": "classic_002",
+    "text": "研究生命起源",
+    "expected": ["研究", "生命", "起源"],
+    "tags": ["ambiguity"]
+  },
+  {
+    "id": "mixed_001",
+    "text": "我在使用GPT-5.5 Thinking模型",
+    "expected": ["我", "在", "使用", "GPT-5.5", "Thinking", "模型"],
+    "tags": ["mixed_text", "ai"]
+  },
+  {
+    "id": "ecommerce_001",
+    "text": "男款运动百搭纯色中筒袜",
+    "expected": ["男款", "运动", "百搭", "纯色", "中筒袜"],
+    "tags": ["ecommerce"]
+  },
+  {
+    "id": "search_001",
+    "text": "中国科学院计算技术研究所",
+    "expected_search_contains": ["中国科学院", "科学院", "计算技术", "技术研究所", "研究所"],
+    "tags": ["search"]
+  },
+  {
+    "id": "person_001",
+    "text": "小明硕士毕业于中国科学院计算所",
+    "expected": ["小明", "硕士", "毕业", "于", "中国科学院", "计算所"],
+    "tags": ["person", "academic"]
+  },
+  {
+    "id": "tech_001",
+    "text": "Python3.11在Windows上安装onnxruntime-gpu失败",
+    "expected": ["Python3.11", "在", "Windows", "上", "安装", "onnxruntime-gpu", "失败"],
+    "tags": ["mixed_text", "technical"]
+  },
+  {
+    "id": "ecommerce_002",
+    "text": "苹果手机壳透明防摔MagSafe磁吸",
+    "expected": ["苹果", "手机", "壳", "透明", "防", "摔", "MagSafe", "磁吸"],
+    "tags": ["ecommerce", "mixed_text"]
+  }
+]

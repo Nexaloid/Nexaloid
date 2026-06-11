@@ -1,0 +1,53 @@
+- id: classic_001
+  text: "南京市长江大桥"
+  expected:
+    - "南京市"
+    - "长江大桥"
+  tags:
+    - classic
+    - ambiguity
+
+- id: classic_002
+  text: "研究生命起源"
+  expected:
+    - "研究"
+    - "生命"
+    - "起源"
+  tags:
+    - ambiguity
+
+- id: mixed_001
+  text: "我在使用GPT-5.5 Thinking模型"
+  expected:
+    - "我"
+    - "在"
+    - "使用"
+    - "GPT-5.5"
+    - "Thinking"
+    - "模型"
+  tags:
+    - mixed_text
+    - ai
+
+- id: ecommerce_001
+  text: "男款运动百搭纯色中筒袜"
+  expected:
+    - "男款"
+    - "运动"
+    - "百搭"
+    - "纯色"
+    - "中筒袜"
+  tags:
+    - ecommerce
+
+- id: search_001
+  text: "中国科学院计算技术研究所"
+  expected_search_contains:
+    - "中国科学院"
+    - "科学院"
+    - "计算技术"
+    - "技术研究所"
+    - "研究所"
+  tags:
+    - search
+
