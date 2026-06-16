@@ -1,0 +1,11 @@
+{
+  "name": "nexaloid",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "build": "node-gyp rebuild",
+    "smoke": "node examples/smoke.js"
+  },
+  "gypfile": true
+}
