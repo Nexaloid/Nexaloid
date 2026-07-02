@@ -14,13 +14,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        target:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: windows-latest
+            platform: windows-x64
+          - os: macos-15-intel
+            platform: darwin-x64
+          - os: macos-latest
+            platform: darwin-arm64
+    runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python }}
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
@@ -30,9 +39,20 @@ jobs:
       - run: python ${{ github.workspace }}/tools/stage_assets.py
       - run: python -m build --wheel
         working-directory: bindings/python
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf
+          python -m pip install auditwheel
+          python -m auditwheel repair bindings/python/dist/*.whl -w bindings/python/wheelhouse
+          rm bindings/python/dist/*.whl
+          mv bindings/python/wheelhouse/*.whl bindings/python/dist/
+      - run: python -m pip install --force-reinstall bindings/python/dist/*.whl
+        shell: bash
+      - run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
       - uses: actions/upload-artifact@v6
         with:
-          name: pypi-${{ runner.os }}
+          name: pypi-${{ matrix.target.platform }}-py${{ matrix.python }}
           path: bindings/python/dist/*
 
   pypi:
@@ -55,8 +75,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        target:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: windows-latest
+            platform: windows-x64
+          - os: macos-15-intel
+            platform: darwin-x64
+          - os: macos-latest
+            platform: darwin-arm64
+    runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -70,7 +98,7 @@ jobs:
       - run: python tools/stage_assets.py
       - uses: actions/upload-artifact@v6
         with:
-          name: cargo-native-${{ runner.os }}
+          name: cargo-native-${{ matrix.target.platform }}
           path: bindings/rust/nexaloid-sys/native/**
 
   cargo:
@@ -96,8 +124,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        target:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: windows-latest
+            platform: windows-x64
+          - os: macos-15-intel
+            platform: darwin-x64
+          - os: macos-latest
+            platform: darwin-arm64
+    runs-on: ${{ matrix.target.os }}
     defaults:
       run:
         working-directory: bindings/node
@@ -117,9 +153,10 @@ jobs:
         working-directory: ${{ github.workspace }}/core
       - run: npm run build
       - run: python ${{ github.workspace }}/tools/stage_assets.py --node-addon
+      - run: npm run smoke
       - uses: actions/upload-artifact@v6
         with:
-          name: npm-${{ runner.os }}
+          name: npm-${{ matrix.target.platform }}
           path: bindings/node/prebuilds/**
 
   npm:
@@ -148,4 +185,6 @@ jobs:
           python-version: "3.x"
       - run: python -c "import shutil, pathlib; root=pathlib.Path('${{ github.workspace }}'); dst=root/'bindings/node/data/dict'; dst.mkdir(parents=True, exist_ok=True); [shutil.copy2(root/'data/dict'/n, dst/n) for n in ('nexaloid.tsv', 'nexaloid.nxdict')]"
         working-directory: ${{ github.workspace }}
+      - run: npm pack --dry-run
+      - run: npm run smoke
       - run: npm publish --provenance --access public
