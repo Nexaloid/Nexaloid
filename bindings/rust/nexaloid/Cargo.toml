@@ -1,13 +1,13 @@
 [package]
 name = "nexaloid"
-version = "0.1.0-alpha.0"
+version = "0.1.0-alpha.1"
 edition = "2021"
 description = "Chinese tokenizer runtime"
 license = "Apache-2.0"
 repository = "https://github.com/Nexaloid/Nexaloid"
 
 [dependencies]
-nexaloid-sys = { version = "0.1.0-alpha.0", path = "../nexaloid-sys" }
+nexaloid-sys = { version = "0.1.0-alpha.1", path = "../nexaloid-sys" }
 
 [lib]
 path = "src/lib.rs"

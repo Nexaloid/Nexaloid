@@ -3,6 +3,7 @@ package nexaloid
 /*
 #cgo CFLAGS: -I../../../core/include
 #cgo windows LDFLAGS: -L../../../core/zig-out/lib -lnexaloid
+#cgo linux darwin LDFLAGS: -L../../../core/zig-out/lib -lnexaloid
 #include <stdlib.h>
 #include "nexaloid.h"
 

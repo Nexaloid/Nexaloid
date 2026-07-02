@@ -41,7 +41,7 @@ python -c "import nexaloid.compat_jieba as jieba; print(jieba.lcut('南京市长
 ### Node.js
 
 ```javascript
-const { Tokenizer } = require("nexaloid");
+const { Tokenizer } = require("@nexaloid/nexaloid");
 
 const tokenizer = new Tokenizer();
 console.log(tokenizer.lcut("南京市长江大桥"));

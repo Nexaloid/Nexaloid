@@ -5,7 +5,7 @@ Node.js wraps the nexaloid C ABI through N-API. Segmentation stays in native cor
 ## Usage
 
 ```js
-const nexaloid = require("nexaloid");
+const nexaloid = require("@nexaloid/nexaloid");
 const tokenizer = new nexaloid.Tokenizer({ dictPath: "data/dict/nexaloid.tsv" });
 
 tokenizer.lcut("南京市长江大桥");

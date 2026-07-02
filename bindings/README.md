@@ -18,16 +18,16 @@ $env:PATH = "$PWD\core\zig-out\bin;$env:PATH"
 ## Rust
 
 ```powershell
-$env:RUSTFLAGS = "-L F:\Code\03_OpenCode\Nexaloid\core\zig-out\lib"
-$env:PATH = "F:\Code\03_OpenCode\Nexaloid\core\zig-out\bin;$env:PATH"
+$env:RUSTFLAGS = "-L native=$PWD\core\zig-out\lib"
+$env:PATH = "$PWD\core\zig-out\bin;$env:PATH"
 cargo run --manifest-path bindings/rust/nexaloid/Cargo.toml --example smoke
 ```
 
 ## Go
 
 ```powershell
-$env:PATH = "F:\Code\03_OpenCode\Nexaloid\core\zig-out\bin;$env:PATH"
 cd bindings/go
+$env:PATH = "$PWD\..\..\core\zig-out\bin;$env:PATH"
 go test ./nexaloid
 ```
 
