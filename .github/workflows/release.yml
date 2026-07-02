@@ -99,7 +99,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: cargo-native-${{ matrix.target.platform }}
-          path: bindings/rust/nexaloid-sys/native/**
+          path: bindings/rust/nexaloid-sys/native
 
   cargo:
     runs-on: ubuntu-latest
@@ -157,7 +157,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: npm-${{ matrix.target.platform }}
-          path: bindings/node/prebuilds/**
+          path: bindings/node/prebuilds
 
   npm:
     runs-on: ubuntu-latest
@@ -187,4 +187,5 @@ jobs:
         working-directory: ${{ github.workspace }}
       - run: npm pack --dry-run
       - run: npm run smoke
+      - run: python ${{ github.workspace }}/tools/smoke_npm_package.py
       - run: npm publish --provenance --access public
