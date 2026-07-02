@@ -1,7 +1,13 @@
 {
   "name": "nexaloid",
   "version": "0.1.0",
-  "private": true,
+  "description": "Chinese tokenizer runtime",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nexaloid/Nexaloid.git",
+    "directory": "bindings/node"
+  },
   "main": "index.js",
   "scripts": {
     "build": "node-gyp rebuild",

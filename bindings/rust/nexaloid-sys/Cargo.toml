@@ -2,7 +2,9 @@
 name = "nexaloid-sys"
 version = "0.1.0-alpha.0"
 edition = "2021"
+description = "C ABI bindings for the Nexaloid Chinese tokenizer runtime"
+license = "Apache-2.0"
+repository = "https://github.com/Nexaloid/Nexaloid"
 
 [lib]
 path = "src/lib.rs"
-
