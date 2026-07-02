@@ -152,6 +152,11 @@ jobs:
       - run: zig build
         working-directory: ${{ github.workspace }}/core
       - run: npm run build
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf
+        working-directory: ${{ github.workspace }}
       - run: python ${{ github.workspace }}/tools/stage_assets.py --node-addon
       - run: npm run smoke
       - uses: actions/upload-artifact@v6

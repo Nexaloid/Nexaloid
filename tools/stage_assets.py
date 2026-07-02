@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import platform
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -61,7 +62,10 @@ def stage_node(include_addon: bool) -> None:
         if src.suffix != ".lib":
             copy_file(src, prebuild / src.name)
     if include_addon:
-        copy_file(pkg / "build/Release/nexaloid_node.node", prebuild / "nexaloid_node.node")
+        addon = prebuild / "nexaloid_node.node"
+        copy_file(pkg / "build/Release/nexaloid_node.node", addon)
+        if sys.platform == "linux" and shutil.which("patchelf"):
+            subprocess.run(["patchelf", "--set-rpath", "$ORIGIN", str(addon)], check=True)
 
 
 def main() -> None:

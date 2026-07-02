@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -8,7 +9,6 @@ class Token:
     end_byte: int
     start_char: int
     end_char: int
-    pos: str | None
+    pos: Optional[str]
     source: str
     score: float
-
