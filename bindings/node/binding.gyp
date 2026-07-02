@@ -12,10 +12,14 @@
           ]
         }],
         ["OS==\"linux\"", {
-          "libraries": ["-L<(module_root_dir)/../../core/zig-out/lib", "-lnexaloid"]
+          "libraries": ["-L<(module_root_dir)/../../core/zig-out/lib", "-lnexaloid"],
+          "ldflags": ["-Wl,-rpath,$$ORIGIN"]
         }],
         ["OS==\"mac\"", {
-          "libraries": ["-L<(module_root_dir)/../../core/zig-out/lib", "-lnexaloid"]
+          "libraries": ["-L<(module_root_dir)/../../core/zig-out/lib", "-lnexaloid"],
+          "xcode_settings": {
+            "LD_RUNPATH_SEARCH_PATHS": ["@loader_path"]
+          }
         }]
       ]
     }

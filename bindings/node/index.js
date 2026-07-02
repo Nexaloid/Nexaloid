@@ -1,16 +1,23 @@
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "../..");
-if (process.platform === "win32") {
+const platformArch = `${process.platform}-${process.arch}`;
+const prebuildDir = path.join(__dirname, "prebuilds", platformArch);
+if (process.platform === "win32" && require("node:fs").existsSync(prebuildDir)) {
+  process.env.PATH = prebuildDir + path.delimiter + process.env.PATH;
+} else if (process.platform === "win32") {
   process.env.PATH = path.join(root, "core", "zig-out", "bin") + path.delimiter + process.env.PATH;
 }
 
-const native = require("./build/Release/nexaloid_node.node");
+const prebuild = path.join(prebuildDir, "nexaloid_node.node");
+const native = require(require("node:fs").existsSync(prebuild) ? prebuild : "./build/Release/nexaloid_node.node");
+const packagedDict = path.join(__dirname, "data", "dict", "nexaloid.tsv");
+const repoDict = path.join(root, "data", "dict", "nexaloid.tsv");
 
 // JavaScript stays as a convenience shell; segmentation is implemented by the native addon.
 class Tokenizer extends native.Tokenizer {
   constructor(options = {}) {
-    super(options.dictPath || path.join(root, "data", "dict", "nexaloid.tsv"));
+    super(options.dictPath || (require("node:fs").existsSync(packagedDict) ? packagedDict : repoDict));
   }
 
   lcut(text, options = {}) {

@@ -67,7 +67,9 @@ _SOURCES = {
     6: "plugin",
 }
 
-_DICT_DIR = Path(__file__).resolve().parents[4] / "data" / "dict"
+_PACKAGE_DIR = Path(__file__).resolve().parent
+_DICT_DIR = _PACKAGE_DIR / "data" / "dict"
+_REPO_DICT_DIR = Path(__file__).resolve().parents[4] / "data" / "dict"
 _BUILT_DICT = _DICT_DIR / "nexaloid.nxdict"
 _BUILT_TEXT_DICT = _DICT_DIR / "nexaloid.tsv"
 
@@ -77,7 +79,12 @@ def _resolve_dict_path(dict_path: str | os.PathLike[str] | None) -> Path:
         return Path(dict_path)
     if _BUILT_DICT.exists():
         return _BUILT_DICT
-    return _BUILT_TEXT_DICT
+    if _BUILT_TEXT_DICT.exists():
+        return _BUILT_TEXT_DICT
+    repo_built = _REPO_DICT_DIR / "nexaloid.nxdict"
+    if repo_built.exists():
+        return repo_built
+    return _REPO_DICT_DIR / "nexaloid.tsv"
 
 
 def _resolve_domain_dict_path(domain: str | None) -> Path | None:
@@ -103,6 +110,9 @@ def _load_lib() -> ctypes.CDLL:
         candidates.append(Path(explicit))
     root = Path(__file__).resolve().parents[4]
     candidates += [
+        _PACKAGE_DIR / "native" / "nexaloid.dll",
+        _PACKAGE_DIR / "native" / "libnexaloid.so",
+        _PACKAGE_DIR / "native" / "libnexaloid.dylib",
         root / "core" / "zig-out" / "bin" / "nexaloid.dll",
         root / "core" / "zig-out" / "lib" / "libnexaloid.so",
         root / "core" / "zig-out" / "lib" / "libnexaloid.dylib",

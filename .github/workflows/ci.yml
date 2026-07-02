@@ -33,6 +33,7 @@ jobs:
       - run: zig build
         working-directory: core
       - run: python -m pip install -U build
+      - run: python tools/stage_assets.py
       - run: python -m build
         working-directory: bindings/python
       - run: cargo test --manifest-path bindings/rust/nexaloid/Cargo.toml
@@ -43,9 +44,10 @@ jobs:
         working-directory: bindings/go
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/core/zig-out/lib
-      - run: npm pack --dry-run
-        working-directory: bindings/node
       - run: npm run build
+        working-directory: bindings/node
+      - run: python tools/stage_assets.py --node-addon
+      - run: npm pack --dry-run
         working-directory: bindings/node
       - run: npm run smoke
         working-directory: bindings/node
