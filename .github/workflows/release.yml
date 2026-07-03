@@ -3,6 +3,10 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: "Release version, for example 0.1.1 or 0.1.1-alpha.1"
+        required: true
+        type: string
       publish_pypi:
         description: "Publish PyPI"
         type: boolean
@@ -44,6 +48,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
+      - run: python ${{ github.workspace }}/tools/set_release_version.py "${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
@@ -106,6 +111,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
+      - run: python tools/set_release_version.py "${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
@@ -123,6 +129,10 @@ jobs:
     needs: cargo-native-build
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - run: python tools/set_release_version.py "${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
       - uses: actions/download-artifact@v6
         with:
           pattern: cargo-native-*
@@ -164,6 +174,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
+      - run: python ${{ github.workspace }}/tools/set_release_version.py "${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
@@ -207,6 +218,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
+      - run: python ${{ github.workspace }}/tools/set_release_version.py "${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
       - run: python -c "import shutil, pathlib; root=pathlib.Path('${{ github.workspace }}'); dst=root/'bindings/node/data/dict'; dst.mkdir(parents=True, exist_ok=True); [shutil.copy2(root/'data/dict'/n, dst/n) for n in ('nexaloid.tsv', 'nexaloid.nxdict')]"
         working-directory: ${{ github.workspace }}
       - run: npm pack --dry-run

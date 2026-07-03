@@ -4,11 +4,11 @@ version = 4
 
 [[package]]
 name = "nexaloid"
-version = "0.1.0-alpha.1"
+version = "0.0.0-dev.0"
 dependencies = [
  "nexaloid-sys",
 ]
 
 [[package]]
 name = "nexaloid-sys"
-version = "0.1.0-alpha.1"
+version = "0.0.0-dev.0"

@@ -1,6 +1,6 @@
 [package]
 name = "nexaloid-sys"
-version = "0.1.0-alpha.1"
+version = "0.0.0-dev.0"
 edition = "2021"
 description = "C ABI bindings for the Nexaloid Chinese tokenizer runtime"
 license = "Apache-2.0"
