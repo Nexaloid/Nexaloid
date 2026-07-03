@@ -36,12 +36,16 @@ jobs:
         target: &release-targets
           - os: ubuntu-latest
             platform: linux-x64
+            pyplat: ""
           - os: windows-latest
             platform: windows-x64
+            pyplat: win_amd64
           - os: macos-15-intel
             platform: darwin-x64
+            pyplat: macosx_15_0_x86_64
           - os: macos-latest
             platform: darwin-arm64
+            pyplat: macosx_15_0_arm64
     runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v6
@@ -56,7 +60,11 @@ jobs:
         working-directory: ${{ github.workspace }}/core
       - run: python -m pip install -U build
       - run: python ${{ github.workspace }}/tools/stage_assets.py
-      - run: python -m build --wheel
+      - if: matrix.target.pyplat == ''
+        run: python -m build --wheel
+        working-directory: bindings/python
+      - if: matrix.target.pyplat != ''
+        run: python -m build --wheel -C--build-option=--plat-name=${{ matrix.target.pyplat }}
         working-directory: bindings/python
       - if: runner.os == 'Linux'
         run: |
@@ -90,6 +98,7 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
+          skip-existing: true
 
   cargo-native-build:
     if: github.event_name != 'workflow_dispatch' || inputs.publish_cargo
