@@ -112,11 +112,11 @@ jobs:
           path: bindings/rust/nexaloid-sys/native
           merge-multiple: true
       - run: rustup toolchain install stable --profile minimal
-      - run: cargo publish --manifest-path bindings/rust/nexaloid-sys/Cargo.toml
+      - run: cargo publish --allow-dirty --manifest-path bindings/rust/nexaloid-sys/Cargo.toml
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - run: sleep 30
-      - run: cargo publish --manifest-path bindings/rust/nexaloid/Cargo.toml
+      - run: cargo publish --allow-dirty --manifest-path bindings/rust/nexaloid/Cargo.toml
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
