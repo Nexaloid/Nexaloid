@@ -98,7 +98,7 @@ export fn nx_tokenize(
     engine: ?*NxEngine,
     text: ?[*]const u8,
     text_len: usize,
-    mode: NxMode,
+    mode: c_int,
     callback: ?NxTokenCallback,
     user_data: ?*anyopaque,
 ) callconv(.c) NxStatus {
@@ -106,7 +106,8 @@ export fn nx_tokenize(
     const bytes = (text orelse return .invalid_config)[0..text_len];
     const cb = callback orelse return .invalid_config;
 
-    return tokenizeSegmented(ptr, bytes, modeFromAbi(mode), cb, user_data);
+    const checked_mode = modeFromAbi(mode) orelse return .invalid_config;
+    return tokenizeSegmented(ptr, bytes, checked_mode, cb, user_data);
 }
 
 export fn nx_tokenize_batch(
@@ -114,7 +115,7 @@ export fn nx_tokenize_batch(
     texts: ?[*]const ?[*]const u8,
     text_lens: ?[*]const usize,
     text_count: usize,
-    mode: NxMode,
+    mode: c_int,
     thread_count: u32,
     callback: ?NxBatchTokenCallback,
     user_data: ?*anyopaque,
@@ -125,6 +126,7 @@ export fn nx_tokenize_batch(
     const cb = callback orelse return .invalid_config;
 
     if (text_count == 0) return .ok;
+    const checked_mode = modeFromAbi(mode) orelse return .invalid_config;
 
     // Workers fill per-input result slots; callbacks are emitted later in input order.
     const results = allocator.alloc(BatchResult, text_count) catch return .out_of_memory;
@@ -136,7 +138,7 @@ export fn nx_tokenize_batch(
 
     const workers = workerCount(thread_count, text_count);
     if (workers == 1) {
-        batchWorker(ptr, text_ptrs, lens, results, 0, text_count, modeFromAbi(mode));
+        batchWorker(ptr, text_ptrs, lens, results, 0, text_count, checked_mode);
     } else {
         var threads = allocator.alloc(std.Thread, workers) catch return .out_of_memory;
         defer allocator.free(threads);
@@ -145,7 +147,7 @@ export fn nx_tokenize_batch(
         while (worker_index < workers) : (worker_index += 1) {
             const start = text_count * worker_index / workers;
             const end = text_count * (worker_index + 1) / workers;
-            threads[worker_index] = std.Thread.spawn(.{}, batchWorker, .{ ptr, text_ptrs, lens, results, start, end, modeFromAbi(mode) }) catch return .internal;
+            threads[worker_index] = std.Thread.spawn(.{}, batchWorker, .{ ptr, text_ptrs, lens, results, start, end, checked_mode }) catch return .internal;
         }
         for (threads) |thread| thread.join();
     }
@@ -536,10 +538,11 @@ fn batchWorker(
     }
 }
 
-fn modeFromAbi(mode: NxMode) tokenizer_mod.Mode {
+fn modeFromAbi(mode: c_int) ?tokenizer_mod.Mode {
     return switch (mode) {
-        .accurate => .accurate,
-        .full => .full,
-        .search => .search,
+        @intFromEnum(NxMode.accurate) => .accurate,
+        @intFromEnum(NxMode.full) => .full,
+        @intFromEnum(NxMode.search) => .search,
+        else => null,
     };
 }

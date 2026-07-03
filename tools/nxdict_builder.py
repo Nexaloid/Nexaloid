@@ -108,7 +108,7 @@ def build(in_path: Path, out_path: Path) -> tuple[int, int, int]:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("wb") as f:
         f.write(MAGIC)
-        f.write(struct.pack("<III", len(codepoints), len(base), 0))
+        f.write(struct.pack("<III", len(codepoints), len(base), len(entries)))
         for cp in codepoints:
             f.write(struct.pack("<I", cp))
         for item in base:
@@ -117,6 +117,9 @@ def build(in_path: Path, out_path: Path) -> tuple[int, int, int]:
             f.write(struct.pack("<I", item))
         for word_id, score in meta:
             f.write(struct.pack("<If", word_id, score))
+        for data, score in entries:
+            f.write(struct.pack("<HHf", len(data), 0, score))
+            f.write(data)
     return len(entries), len(base), len(codepoints)
 
 

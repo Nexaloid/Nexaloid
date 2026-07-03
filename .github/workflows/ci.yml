@@ -83,6 +83,8 @@ jobs:
         shell: bash
       - name: Smoke test Python binding
         run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
+      - name: Run regression checks
+        run: python tools/regression_checks.py
       - name: Test Rust binding
         run: cargo test --manifest-path bindings/rust/nexaloid/Cargo.toml
         env:

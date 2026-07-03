@@ -190,6 +190,7 @@ class Tokenizer:
     def close(self) -> None:
         if not self._closed:
             _LIB.nx_engine_free(self._engine)
+            self._engine = ctypes.c_void_p()
             self._closed = True
 
     def __del__(self) -> None:
@@ -199,6 +200,7 @@ class Tokenizer:
             pass
 
     def add_word(self, word: str, freq: float | None = None, tag: str | None = None) -> None:
+        self._ensure_open()
         del tag
         score = float(freq if freq is not None else 10.0)
         self._add_word_score(word, score)
@@ -213,6 +215,7 @@ class Tokenizer:
         self._deleted.add(word)
 
     def load_userdict(self, path: str | os.PathLike[str]) -> None:
+        self._ensure_open()
         data = str(Path(path)).encode("utf-8")
         self._check(_LIB.nx_reload_user_dict(self._engine, data))
 
@@ -223,6 +226,7 @@ class Tokenizer:
         return self._words.get(word, 0)
 
     def tokenize(self, text: str, mode: Mode = Mode.ACCURATE) -> list[Token]:
+        self._ensure_open()
         data = text.encode("utf-8")
         out: list[Token] = []
 
@@ -257,6 +261,7 @@ class Tokenizer:
         mode: Mode = Mode.ACCURATE,
         thread_count: int = 0,
     ) -> list[list[Token]]:
+        self._ensure_open()
         encoded = [text.encode("utf-8") for text in texts]
         text_array = (ctypes.c_char_p * len(encoded))(*encoded)
         len_array = (ctypes.c_size_t * len(encoded))(*(len(item) for item in encoded))
@@ -321,3 +326,7 @@ class Tokenizer:
         if status != 0:
             msg = _LIB.nx_status_message(status).decode("utf-8", "replace")
             raise NexaloidError(msg)
+
+    def _ensure_open(self) -> None:
+        if self._closed:
+            raise NexaloidError("tokenizer is closed")

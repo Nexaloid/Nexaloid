@@ -98,7 +98,9 @@ NxStatus nx_engine_new(const NxConfig *config, NxEngine **out_engine);
 /* Free an engine. NULL is allowed. */
 void nx_engine_free(NxEngine *engine);
 
-/* Tokenize one UTF-8 byte slice. text does not need to be NUL-terminated. */
+/* Tokenize one UTF-8 byte slice. text does not need to be NUL-terminated.
+   Concurrent tokenization on one engine is allowed; do not call nx_add_word or
+   nx_reload_user_dict concurrently with tokenization on the same engine. */
 NxStatus nx_tokenize(
     NxEngine *engine,
     const char *text,
@@ -120,10 +122,12 @@ NxStatus nx_tokenize_batch(
     void *user_data
 );
 
-/* Reload a user dictionary overlay. Current implementation appends/overwrites words. */
+/* Reload a user dictionary overlay. Not safe to run concurrently with tokenization on the same engine.
+   Current implementation appends/overwrites words. */
 NxStatus nx_reload_user_dict(NxEngine *engine, const char *user_dict_path);
 
-/* Add a word at runtime. word_id 0 lets core allocate an id. */
+/* Add a word at runtime. Not safe to run concurrently with tokenization on the same engine.
+   word_id 0 lets core allocate an id. */
 NxStatus nx_add_word(
     NxEngine *engine,
     const char *word,

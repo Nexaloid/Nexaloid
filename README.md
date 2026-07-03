@@ -132,6 +132,7 @@ The core is a single Zig library (`libnexaloid`). Language bindings call the C A
 - **Batch tokenization**: native worker threads with in-order callback emission
 - **Segmented long-input processing**: inputs split on sentence boundaries (newline, period, exclamation, CJK punctuation) into ≤512-char chunks
 - **Lattice indexed by start character**: O(1) edge lookup per position
+- **Thread model**: concurrent tokenization on one engine is allowed; do not call `nx_add_word` or `nx_reload_user_dict` while that same engine is tokenizing
 
 ### Cross-Language Consistency
 
