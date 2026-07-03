@@ -78,7 +78,9 @@ tokens, _ := tokenizer.Tokenize("南京市长江大桥", nexaloid.Accurate)
 ### Rust
 
 ```rust
-let tokenizer = Tokenizer::new(config)?;
+use nexaloid::{Mode, Tokenizer};
+
+let tokenizer = Tokenizer::new_default()?;
 let tokens = tokenizer.tokenize("南京市长江大桥", Mode::Accurate)?;
 ```
 

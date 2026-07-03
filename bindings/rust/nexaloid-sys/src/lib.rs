@@ -1,4 +1,12 @@
 use std::ffi::{c_char, c_void};
+use std::path::PathBuf;
+
+pub fn bundled_dict_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("data")
+        .join("dict")
+        .join("nexaloid.nxdict")
+}
 
 #[repr(C)]
 pub struct NxEngine {

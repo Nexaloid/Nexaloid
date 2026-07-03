@@ -43,6 +43,7 @@ def stage_python() -> None:
 
 
 def stage_rust() -> None:
+    copy_file(ROOT / "data/dict/nexaloid.nxdict", ROOT / "bindings/rust/nexaloid-sys/data/dict/nexaloid.nxdict")
     native = ROOT / "bindings/rust/nexaloid-sys/native" / platform_tag()
     for src in core_libs():
         copy_file(src, native / src.name)

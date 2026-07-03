@@ -34,6 +34,21 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
+    pub fn new_default() -> Result<Self, Error> {
+        let dict =
+            CString::new(sys::bundled_dict_path().to_string_lossy().as_bytes()).map_err(|_| {
+                Error {
+                    status: sys::NxStatus::InvalidConfig,
+                    message: "bundled dictionary path contains NUL".to_string(),
+                }
+            })?;
+        let config = sys::NxConfig {
+            dict_path: dict.as_ptr(),
+            ..Default::default()
+        };
+        Self::new(config)
+    }
+
     pub fn new(config: sys::NxConfig) -> Result<Self, Error> {
         let mut engine = std::ptr::null_mut();
         check(unsafe { sys::nx_engine_new(&config, &mut engine) })?;
@@ -63,7 +78,10 @@ impl Tokenizer {
 
     pub fn tokenize(&self, text: &str, mode: Mode) -> Result<Vec<Token>, Error> {
         let mut out = Vec::new();
-        let mut ctx = CallbackCtx { text, out: &mut out };
+        let mut ctx = CallbackCtx {
+            text,
+            out: &mut out,
+        };
         // nx_tokenize invokes the callback before it returns, so borrowing ctx is safe.
         check(unsafe {
             sys::nx_tokenize(

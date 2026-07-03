@@ -6,7 +6,7 @@ description = "C ABI bindings for the Nexaloid Chinese tokenizer runtime"
 license = "Apache-2.0"
 repository = "https://github.com/Nexaloid/Nexaloid"
 build = "build.rs"
-include = ["build.rs", "src/**", "native/**", "Cargo.toml"]
+include = ["build.rs", "src/**", "native/**", "data/dict/**", "Cargo.toml"]
 
 [lib]
 path = "src/lib.rs"

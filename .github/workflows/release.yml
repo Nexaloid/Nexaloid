@@ -139,6 +139,7 @@ jobs:
           pattern: cargo-native-*
           path: bindings/rust/nexaloid-sys/native
           merge-multiple: true
+      - run: python -c "import pathlib, shutil; root=pathlib.Path.cwd(); dst=root/'bindings/rust/nexaloid-sys/data/dict'; dst.mkdir(parents=True, exist_ok=True); shutil.copy2(root/'data/dict/nexaloid.nxdict', dst/'nexaloid.nxdict')"
       - run: rustup toolchain install stable --profile minimal
       - run: cargo publish --allow-dirty --manifest-path bindings/rust/nexaloid-sys/Cargo.toml
         env:
