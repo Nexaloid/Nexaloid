@@ -1,4 +1,4 @@
-name: CI
+name: Build and Test
 
 on:
   workflow_dispatch:
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   package-smoke:
+    name: Package smoke (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:
@@ -20,26 +21,35 @@ jobs:
             platform: linux-x64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: mlugg/setup-zig@v2
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
-      - uses: actions/setup-python@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version: "1.22"
-      - uses: actions/setup-node@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           package-manager-cache: false
-      - run: rustup toolchain install stable --profile minimal
-      - run: zig build test
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Test Zig core
+        run: zig build test
         working-directory: core
-      - run: zig build
+      - name: Build native library
+        run: zig build
         working-directory: core
-      - shell: bash
+      - name: Export native library paths
+        shell: bash
         run: |
           python - <<'PY'
           import os
@@ -52,11 +62,15 @@ jobs:
               f"DYLD_LIBRARY_PATH={root / 'core/zig-out/lib'}\n"
           )
           PY
-      - run: python -m pip install -U build
-      - run: python tools/stage_assets.py
-      - run: python -m build
+      - name: Install Python build tools
+        run: python -m pip install -U build
+      - name: Stage package assets
+        run: python tools/stage_assets.py
+      - name: Build Python wheel
+        run: python -m build
         working-directory: bindings/python
-      - if: runner.os == 'Linux'
+      - name: Repair Linux wheel
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y patchelf
@@ -64,24 +78,34 @@ jobs:
           python -m auditwheel repair bindings/python/dist/*.whl -w bindings/python/wheelhouse
           rm bindings/python/dist/*.whl
           mv bindings/python/wheelhouse/*.whl bindings/python/dist/
-      - run: python -m pip install --force-reinstall bindings/python/dist/*.whl
+      - name: Install Python wheel
+        run: python -m pip install --force-reinstall bindings/python/dist/*.whl
         shell: bash
-      - run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
-      - run: cargo test --manifest-path bindings/rust/nexaloid/Cargo.toml
+      - name: Smoke test Python binding
+        run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
+      - name: Test Rust binding
+        run: cargo test --manifest-path bindings/rust/nexaloid/Cargo.toml
         env:
           RUSTFLAGS: -L native=${{ github.workspace }}/core/zig-out/lib
-      - run: go test ./nexaloid
+      - name: Test Go binding
+        run: go test ./nexaloid
         working-directory: bindings/go
-      - run: npm run build
+      - name: Build Node.js addon
+        run: npm run build
         working-directory: bindings/node
-      - run: python tools/stage_assets.py --node-addon
-      - run: npm pack --dry-run
+      - name: Stage Node.js prebuild
+        run: python tools/stage_assets.py --node-addon
+      - name: Check npm package contents
+        run: npm pack --dry-run
         working-directory: bindings/node
-      - run: npm run smoke
+      - name: Smoke test Node.js binding
+        run: npm run smoke
         working-directory: bindings/node
-      - run: python tools/smoke_npm_package.py
+      - name: Smoke test packed npm package
+        run: python tools/smoke_npm_package.py
 
   python-versions:
+    name: Python ${{ matrix.python }} compatibility
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     strategy:
@@ -89,31 +113,42 @@ jobs:
       matrix:
         python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v6
-      - uses: mlugg/setup-zig@v2
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
-      - uses: actions/setup-python@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - run: zig build
+      - name: Build native library
+        run: zig build
         working-directory: core
-      - run: python -m pip install -U build
-      - run: python tools/stage_assets.py
-      - run: python -m build --wheel
+      - name: Install Python build tools
+        run: python -m pip install -U build
+      - name: Stage package assets
+        run: python tools/stage_assets.py
+      - name: Build Python wheel
+        run: python -m build --wheel
         working-directory: bindings/python
-      - run: |
+      - name: Repair Linux wheel
+        run: |
           sudo apt-get update
           sudo apt-get install -y patchelf
           python -m pip install auditwheel
           python -m auditwheel repair bindings/python/dist/*.whl -w bindings/python/wheelhouse
           rm bindings/python/dist/*.whl
           mv bindings/python/wheelhouse/*.whl bindings/python/dist/
-      - run: python -m pip install --force-reinstall bindings/python/dist/*.whl
+      - name: Install Python wheel
+        run: python -m pip install --force-reinstall bindings/python/dist/*.whl
         shell: bash
-      - run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
+      - name: Smoke test Python binding
+        run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
 
   node-versions:
+    name: Node.js ${{ matrix.node }} compatibility
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     strategy:
@@ -121,25 +156,35 @@ jobs:
       matrix:
         node: [18, 20, 22, 24]
     steps:
-      - uses: actions/checkout@v6
-      - uses: mlugg/setup-zig@v2
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
-      - uses: actions/setup-python@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: "3.x"
-      - uses: actions/setup-node@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
           package-manager-cache: false
-      - run: zig build
+      - name: Build native library
+        run: zig build
         working-directory: core
-      - run: npm run build
+      - name: Build Node.js addon
+        run: npm run build
         working-directory: bindings/node
-      - run: |
+      - name: Install packaging tools
+        run: |
           sudo apt-get update
           sudo apt-get install -y patchelf
-      - run: python tools/stage_assets.py --node-addon
-      - run: npm run smoke
+      - name: Stage Node.js prebuild
+        run: python tools/stage_assets.py --node-addon
+      - name: Smoke test Node.js binding
+        run: npm run smoke
         working-directory: bindings/node
-      - run: python tools/smoke_npm_package.py
+      - name: Smoke test packed npm package
+        run: python tools/smoke_npm_package.py

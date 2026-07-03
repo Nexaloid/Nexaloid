@@ -1,16 +1,16 @@
 # Nexaloid
 
-Nexaloid is a high-performance Chinese tokenizer runtime, built in Zig with a stable C ABI and first-class bindings for Python, Node.js, C++, Go, and Rust.
+Nexaloid is a Chinese tokenizer runtime, built in Zig with a stable C ABI and bindings for Python, Node.js, C++, Go, and Rust.
 
-It is designed for production workloads where correctness, throughput, and cross-language consistency matter: search engines, RAG pipelines, e-commerce catalogs, and text analytics.
+It is aimed at workloads where correctness, throughput, and cross-language consistency matter: search engines, RAG pipelines, e-commerce catalogs, and text analytics.
 
 ## What Nexaloid Is
 
 - A dictionary-driven Chinese segmentation engine (double-array trie + Viterbi decoder)
-- A search tokenizer that emits n-gram expansions for recall
-- An **explainable** tokenizer: every token carries its origin (base dict, user dict, rule, or plugin) and a score
-- A **pluggable** segmentation runtime with a defined plugin ABI for neural-model integration
-- Infrastructure for byte- and character-offset-preserving token output across all language bindings
+- A search tokenizer that emits dictionary candidates plus 2-gram / 3-gram expansions for recall
+- An **explainable** tokenizer: every token carries its origin (base dict, user dict, rule, or unknown fallback) and a score
+- A defined plugin ABI for future neural-model integration; the current core runs without loading plugins
+- Byte- and character-offset-preserving token output through the C ABI and language bindings
 
 ## What Nexaloid Is Not
 
@@ -37,6 +37,18 @@ print(jieba.lcut("研究生命起源"))
 $env:PYTHONPATH = "$PWD\bindings\python\src"
 python -c "import nexaloid.compat_jieba as jieba; print(jieba.lcut('南京市长江大桥'))"
 ```
+
+#### jieba API Compatibility
+
+Existing jieba users can keep common jieba function names by changing the import:
+
+```python
+import nexaloid.compat_jieba as jieba
+```
+
+The adapter exports a module-level tokenizer, like jieba's global API. Current compatible names are `cut`, `lcut`, `cut_for_search`, `lcut_for_search`, `load_userdict`, `add_word`, `del_word`, and `suggest_freq`.
+
+`cut` returns an iterator of strings, `lcut` returns a list, and search mode de-duplicates multi-character search tokens. `load_userdict` accepts jieba-style `word freq tag` text dictionaries; tags, `HMM`, and `use_paddle` are accepted for API shape but ignored by the current adapter. Use `nexaloid.Tokenizer` directly when you need offsets, token source, scores, or batch tokenization. See [docs/jieba_compat.md](docs/jieba_compat.md) for the compatibility boundary.
 
 ### Node.js
 
@@ -89,7 +101,7 @@ let tokens = tokenizer.tokenize("南京市长江大桥", Mode::Accurate)?;
 | Mode | Behavior |
 |------|----------|
 | **Accurate** | Viterbi shortest-path decoding; filters pure whitespace tokens |
-| **Search** | Emits all dictionary candidates + 2-gram / 3-gram expansions for recall |
+| **Search** | Emits explicit non-unknown candidates + 2-gram / 3-gram expansions for recall |
 | **Full** | Reserved for API compatibility; behaves like Accurate in v0.1 |
 
 ## Architecture
@@ -98,36 +110,36 @@ let tokens = tokenizer.tokenize("南京市长江大桥", Mode::Accurate)?;
 UTF-8 text
   → Scanner (codepoints + byte/char offsets + class)
   → Dictionary Matcher (double-array trie walk + overlay trie)
-  → Rule Matcher (mixed-script boundaries, number + unit patterns)
+  → Rule Matcher (mixed ASCII terms such as GPT-5.5 and onnxruntime-gpu)
   → Lattice (all candidate edges from dict/rule/unknown sources)
   → Viterbi Decoder (globally best path)
   → Token Stream (filtered, offset-preserving)
 ```
 
-The core is a single Zig library (`libnexaloid`). Language bindings call the C ABI and never reimplement tokenizer logic. Plugins (neural scorers, POS taggers, NER) hook into the pipeline via the stable plugin ABI — the core runs without them.
+The core is a single Zig library (`libnexaloid`). Language bindings call the C ABI and do not reimplement tokenizer logic. The plugin ABI header is present for v0.2 work, but current runtime plugin loading is not implemented.
 
 ## Features
 
 ### Dictionary System
 
-- **Base dictionary**: 350,000+ words, stored as a memory-mapped double-array trie (mmap on Windows, zero-copy)
+- **Base dictionary**: about 349k words, stored as a double-array trie; NXDICT base dictionaries can be memory-mapped on Windows
 - **User dictionary**: runtime overlay trie, loaded from TSV or binary NXDICT format
-- **Domain overlay**: appended as an overlay on init via `NxConfig.user_dict_path`
-- **Binary format (NXDICT)**: compact packed trie with unified DAT + entries; ~38 MB for 350k words
+- **Domain overlay**: loaded through the same user-dictionary overlay path via `NxConfig.user_dict_path`
+- **Binary format (NXDICT)**: compact packed trie; the current bundled dictionary is about 38 MiB
 
 ### Performance
 
-- **Batch parallel tokenization**: multi-threaded worker pool with in-order callback emission
+- **Batch tokenization**: native worker threads with in-order callback emission
 - **Segmented long-input processing**: inputs split on sentence boundaries (newline, period, exclamation, CJK punctuation) into ≤512-char chunks
 - **Lattice indexed by start character**: O(1) edge lookup per position
 
 ### Cross-Language Consistency
 
-All bindings share the same core. A token produced by the Python binding is byte-identical to a token from the C++ or Go binding for the same input and dictionary.
+All bindings call the same core tokenizer. Token text and offsets should match across bindings for the same input and dictionary.
 
-### Plugin ABI (v0.2+)
+### Plugin ABI
 
-The plugin system defines 8 hook points (candidate provider, boundary scorer, edge scorer, token filter, token expander, POS tagger, entity recognizer, normalizer). Plugins are dynamic libraries loaded at runtime — the core defines the ABI, plugins implement it.
+`core/include/nexaloid_plugin.h` defines 8 planned hook kinds: candidate provider, boundary scorer, edge scorer, token filter, token expander, POS tagger, entity recognizer, and normalizer. Runtime loading is reserved for v0.2+ and is not active in the current core.
 
 ## C ABI
 
@@ -158,18 +170,18 @@ Every token includes:
 | `start_char` / `end_char` | Unicode codepoint offsets |
 | `word_id` | Dictionary word ID (0 for unknown / rule tokens) |
 | `pos_id` | POS tag ID (reserved, unresolved in v0.1) |
-| `source` | Origin: `base_dict`, `user_dict`, `domain_dict`, `rule`, `unknown`, or `plugin` |
+| `source` | Origin: `base_dict`, `user_dict`, `rule`, or `unknown`; `domain_dict` and `plugin` are reserved source values |
 | `score` | Decoder score (higher is better; log-probability for dict tokens) |
 
 ## Dictionary Management
 
-Build the base dictionary from jieba's `dict.txt` plus a custom overlay:
+Build the base dictionary from jieba's `dict.txt` plus a custom overlay. The command auto-detects an installed `jieba` package; otherwise pass `--jieba-dict path\to\dict.txt`.
 
 ```powershell
 python tools/dict_builder.py --out data/dict/nexaloid.tsv
 ```
 
-Compile to the packed binary format for mmap-accelerated loading:
+Compile to the packed NXDICT binary format. Windows base-dictionary loading can mmap this format.
 
 ```powershell
 python tools/nxdict_builder.py data/dict/nexaloid.tsv data/dict/nexaloid.nxdict
@@ -194,6 +206,11 @@ $env:PYTHONPATH = "$PWD\bindings\python\src"
 python tools\badcase_runner.py
 python tools\validate_overlay.py
 python tools\benchmark.py
+
+# Windows: Go tests need the native DLL on PATH
+$env:PATH = "$PWD\core\zig-out\bin;$env:PATH"
+cd bindings\go
+rtk go test ./nexaloid
 ```
 
 ## Benchmark
