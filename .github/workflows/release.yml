@@ -33,7 +33,7 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        target:
+        target: &release-targets
           - os: ubuntu-latest
             platform: linux-x64
           - os: windows-latest
@@ -96,15 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - os: ubuntu-latest
-            platform: linux-x64
-          - os: windows-latest
-            platform: windows-x64
-          - os: macos-15-intel
-            platform: darwin-x64
-          - os: macos-latest
-            platform: darwin-arm64
+        target: *release-targets
     runs-on: ${{ matrix.target.os }}
     steps:
       - uses: actions/checkout@v6
@@ -152,15 +144,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - os: ubuntu-latest
-            platform: linux-x64
-          - os: windows-latest
-            platform: windows-x64
-          - os: macos-15-intel
-            platform: darwin-x64
-          - os: macos-latest
-            platform: darwin-arm64
+        target: *release-targets
     runs-on: ${{ matrix.target.os }}
     defaults:
       run:

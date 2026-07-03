@@ -1,21 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import platform
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+from platform_tag import platform_tag
+
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def target_name() -> str:
-    os_name = {"win32": "windows", "darwin": "darwin"}.get(sys.platform, "linux")
-    machine = platform.machine().lower()
-    arch = "x64" if machine in {"amd64", "x86_64"} else "arm64" if machine in {"arm64", "aarch64"} else machine
-    return f"{os_name}-{arch}"
 
 
 def copy_file(src: Path, dst: Path) -> None:
@@ -49,7 +43,7 @@ def stage_python() -> None:
 
 
 def stage_rust() -> None:
-    native = ROOT / "bindings/rust/nexaloid-sys/native" / target_name()
+    native = ROOT / "bindings/rust/nexaloid-sys/native" / platform_tag()
     for src in core_libs():
         copy_file(src, native / src.name)
 
@@ -57,7 +51,7 @@ def stage_rust() -> None:
 def stage_node(include_addon: bool) -> None:
     pkg = ROOT / "bindings/node"
     copy_dict(pkg / "data/dict")
-    prebuild = pkg / "prebuilds" / target_name()
+    prebuild = pkg / "prebuilds" / platform_tag()
     for src in core_libs():
         if src.suffix != ".lib":
             copy_file(src, prebuild / src.name)

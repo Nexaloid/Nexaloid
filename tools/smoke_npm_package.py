@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import tempfile
@@ -15,12 +14,15 @@ def main() -> None:
     node = shutil.which("node")
     if npm is None or node is None:
         raise RuntimeError("npm and node must be on PATH")
-    package = ROOT / "bindings/node/package.json"
-    meta = json.loads(package.read_text(encoding="utf-8"))
-    tarball = ROOT / "bindings/node" / f"nexaloid-nexaloid-{meta['version']}.tgz"
-    if tarball.exists():
-        tarball.unlink()
-    subprocess.run([npm, "pack"], cwd=ROOT / "bindings/node", check=True)
+    result = subprocess.run(
+        [npm, "pack", "--json"],
+        cwd=ROOT / "bindings/node",
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    filename = __import__("json").loads(result.stdout)[0]["filename"]
+    tarball = ROOT / "bindings/node" / filename
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         subprocess.run([npm, "init", "-y"], cwd=tmp_path, check=True, stdout=subprocess.DEVNULL)

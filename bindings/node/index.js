@@ -1,8 +1,7 @@
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "../..");
-const platform = process.platform === "win32" ? "windows" : process.platform === "darwin" ? "darwin" : "linux";
-const platformArch = `${platform}-${process.arch}`;
+const platformArch = require("./platform");
 const prebuildDir = path.join(__dirname, "prebuilds", platformArch);
 if (process.platform === "win32" && require("node:fs").existsSync(prebuildDir)) {
   process.env.PATH = prebuildDir + path.delimiter + process.env.PATH;
