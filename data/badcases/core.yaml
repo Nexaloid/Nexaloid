@@ -160,3 +160,41 @@
   tags:
     - search
     - noise
+
+- id: search_003
+  text: "长春市长春节前发表讲话"
+  mode: raw_search
+  expected_search_contains:
+    - "长春"
+    - "长春市"
+    - "市长"
+    - "春节"
+    - "春节前"
+    - "发表"
+    - "讲话"
+  expected_search_unique: true
+  expected_search_min_len: 2
+  tags:
+    - search
+    - noise
+
+- id: search_004
+  text: "ChatGPT-5.5支持中文RAG检索。"
+  mode: raw_search
+  expected_search_contains:
+    - "ChatGPT-5.5"
+    - "中文"
+    - "RAG"
+    - "检索"
+  expected_search_excludes:
+    - "Ch"
+    - "Cha"
+    - "ha"
+    - "hat"
+    - "at"
+    - "atG"
+  expected_search_unique: true
+  expected_search_min_len: 2
+  tags:
+    - search
+    - mixed_text

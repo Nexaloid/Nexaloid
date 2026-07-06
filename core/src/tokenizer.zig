@@ -96,17 +96,17 @@ fn searchTokens(allocator: std.mem.Allocator, lattice: *const lattice_mod.Lattic
     errdefer out.deinit(allocator);
     for (lattice.edges.items) |edge| {
         // Search mode exposes all explicit candidates plus small ngrams for recall.
-        if (edge.source != .unknown) try appendSearchToken(allocator, &out, edge);
+        if (edge.source != .unknown) try appendSearchToken(allocator, &out, edge, chars);
         try addSearchNgrams(allocator, &out, edge, chars);
     }
     std.mem.sort(types.NxEdge, out.items, {}, edgeLessThan);
     return out;
 }
 
-fn appendSearchToken(allocator: std.mem.Allocator, out: *std.ArrayListUnmanaged(types.NxEdge), edge: types.NxEdge) !void {
+fn appendSearchToken(allocator: std.mem.Allocator, out: *std.ArrayListUnmanaged(types.NxEdge), edge: types.NxEdge, chars: []const types.NxChar) !void {
     if (edge.end_char - edge.start_char < 2) return;
     for (out.items) |existing| {
-        if (existing.start_char == edge.start_char and existing.end_char == edge.end_char) return;
+        if (sameText(existing, edge, chars)) return;
     }
     try out.append(allocator, edge);
 }
@@ -115,6 +115,7 @@ fn addSearchNgrams(allocator: std.mem.Allocator, out: *std.ArrayListUnmanaged(ty
     const len = edge.end_char - edge.start_char;
     // Unknown edges are fallback safety nets, not useful search expansions.
     if (edge.source == .unknown or len <= 2) return;
+    if (!isHanEdge(edge, chars)) return;
     try addNgrams(allocator, out, edge, chars, 2);
     try addNgrams(allocator, out, edge, chars, 3);
 }
@@ -133,8 +134,26 @@ fn addNgrams(allocator: std.mem.Allocator, out: *std.ArrayListUnmanaged(types.Nx
             .score = edge.score - 1.0,
             .pos_id = edge.pos_id,
             .source = .rule,
-        });
+        }, chars);
     }
+}
+
+fn sameText(a: types.NxEdge, b: types.NxEdge, chars: []const types.NxChar) bool {
+    const a_len = a.end_char - a.start_char;
+    if (a_len != b.end_char - b.start_char) return false;
+    var i: u32 = 0;
+    while (i < a_len) : (i += 1) {
+        if (chars[a.start_char + i].codepoint != chars[b.start_char + i].codepoint) return false;
+    }
+    return true;
+}
+
+fn isHanEdge(edge: types.NxEdge, chars: []const types.NxChar) bool {
+    var i = edge.start_char;
+    while (i < edge.end_char) : (i += 1) {
+        if (chars[i].char_class != .han) return false;
+    }
+    return true;
 }
 
 fn edgeLessThan(_: void, a: types.NxEdge, b: types.NxEdge) bool {
@@ -237,4 +256,30 @@ test "search mode filters single char and duplicate spans" {
             try std.testing.expect(prev.start_char != token.start_char or prev.end_char != token.end_char);
         }
     }
+}
+
+test "search mode deduplicates text and skips ascii ngrams" {
+    var tokenizer = try Tokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+    try tokenizer.addWord("长春", 1, 8.0, 0);
+    try tokenizer.addWord("长春市", 2, 20.0, 0);
+    try tokenizer.addWord("春节前", 3, 18.0, 0);
+
+    var tokens = try tokenizer.tokenizeMode("长春市长春节前ChatGPT-5.5", .search);
+    defer tokens.deinit(std.testing.allocator);
+
+    var saw_ascii = false;
+    for (tokens.items, 0..) |token, i| {
+        const text = "长春市长春节前ChatGPT-5.5"[token.start_byte..token.end_byte];
+        if (std.mem.eql(u8, text, "ChatGPT-5.5")) saw_ascii = true;
+        try std.testing.expect(!std.mem.eql(u8, text, "Ch"));
+        for (tokens.items[0..i]) |prev| {
+            try std.testing.expect(!std.mem.eql(
+                u8,
+                text,
+                "长春市长春节前ChatGPT-5.5"[prev.start_byte..prev.end_byte],
+            ));
+        }
+    }
+    try std.testing.expect(saw_ascii);
 }

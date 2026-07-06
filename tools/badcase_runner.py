@@ -35,6 +35,8 @@ def run(path: Path) -> int:
                 actual = list(jieba.cut_for_search(text))
             expected = case["expected_search_contains"]
             ok = all(word in actual for word in expected)
+            for word in case.get("expected_search_excludes", []):
+                ok = ok and word not in actual
             if case.get("expected_search_unique"):
                 ok = ok and len(actual) == len(set(actual))
             min_len = case.get("expected_search_min_len")

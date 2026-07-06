@@ -123,6 +123,25 @@ def _iter_plugin_paths(path: str | os.PathLike[str]):
             yield candidate
 
 
+def _append_deleted_fallback(out: list[Token], part: str, token: _NxToken) -> None:
+    byte_offset = token.start_byte
+    for index, ch in enumerate(part):
+        data = ch.encode("utf-8")
+        out.append(
+            Token(
+                text=ch,
+                start_byte=byte_offset,
+                end_byte=byte_offset + len(data),
+                start_char=token.start_char + index,
+                end_char=token.start_char + index + 1,
+                pos=None,
+                source="unknown",
+                score=-10.0,
+            )
+        )
+        byte_offset += len(data)
+
+
 def _load_lib() -> ctypes.CDLL:
     # Bindings are thin wrappers; the native shared library does all tokenization.
     explicit = os.environ.get("NEXALOID_LIB")
@@ -278,6 +297,7 @@ class Tokenizer:
             token = token_ptr.contents
             part = raw[token.start_byte : token.end_byte].decode("utf-8")
             if part in self._deleted:
+                _append_deleted_fallback(out, part, token)
                 return
             out.append(
                 Token(
@@ -315,6 +335,7 @@ class Tokenizer:
             token = token_ptr.contents
             part = raw[token.start_byte : token.end_byte].decode("utf-8")
             if part in self._deleted:
+                _append_deleted_fallback(out[index], part, token)
                 return
             out[index].append(
                 Token(

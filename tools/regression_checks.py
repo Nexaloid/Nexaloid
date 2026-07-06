@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+from importlib import metadata
 from pathlib import Path
 
 
@@ -78,10 +79,27 @@ def check_del_word_falls_back() -> None:
         tokenizer.close()
 
 
+def check_del_word_base_falls_back() -> None:
+    tokenizer = Tokenizer()
+    try:
+        tokenizer.del_word("火山")
+        assert tokenizer.lcut("A火山B") == ["A", "火", "山", "B"]
+
+        tokenizer.del_word("南京市")
+        tokens = tokenizer.tokenize("A南京市B")
+        assert "".join(token.text for token in tokens) == "A南京市B"
+    finally:
+        tokenizer.close()
+
+
 def check_version_exported() -> None:
     import nexaloid
 
-    assert isinstance(nexaloid.__version__, str)
+    try:
+        expected = metadata.version("nexaloid")
+    except metadata.PackageNotFoundError:
+        expected = "0.0.0.dev0"
+    assert nexaloid.__version__ == expected
 
 
 def check_repo_dict_preferred() -> None:
@@ -95,6 +113,7 @@ def main() -> int:
         check_invalid_mode,
         check_nxdict_userdict,
         check_del_word_falls_back,
+        check_del_word_base_falls_back,
         check_version_exported,
         check_repo_dict_preferred,
     ]
