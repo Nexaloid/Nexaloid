@@ -1,0 +1,42 @@
+name: Setup Zig
+description: Install Zig without a JavaScript action runtime.
+inputs:
+  version:
+    description: Zig version to install.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install Zig
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${RUNNER_OS}-${RUNNER_ARCH}" in
+          Linux-X64) target="x86_64-linux" ;;
+          macOS-X64) target="x86_64-macos" ;;
+          macOS-ARM64) target="aarch64-macos" ;;
+          *) echo "unsupported runner: ${RUNNER_OS}-${RUNNER_ARCH}" >&2; exit 1 ;;
+        esac
+        version="${{ inputs.version }}"
+        dir="$RUNNER_TEMP/zig-$version"
+        mkdir -p "$dir"
+        curl -fsSL "https://ziglang.org/download/$version/zig-$target-$version.tar.xz" | tar -xJ --strip-components=1 -C "$dir"
+        echo "$dir" >> "$GITHUB_PATH"
+    - name: Install Zig
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        if ($env:RUNNER_ARCH -ne "X64") {
+          throw "unsupported runner: $env:RUNNER_OS-$env:RUNNER_ARCH"
+        }
+        $version = "${{ inputs.version }}"
+        $dir = Join-Path $env:RUNNER_TEMP "zig-$version"
+        $zip = Join-Path $env:RUNNER_TEMP "zig-$version.zip"
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Invoke-WebRequest -Uri "https://ziglang.org/download/$version/zig-x86_64-windows-$version.zip" -OutFile $zip
+        Expand-Archive -LiteralPath $zip -DestinationPath $env:RUNNER_TEMP -Force
+        $expanded = Join-Path $env:RUNNER_TEMP "zig-x86_64-windows-$version"
+        Get-ChildItem -LiteralPath $expanded | Move-Item -Destination $dir -Force
+        Add-Content -Path $env:GITHUB_PATH -Value $dir
