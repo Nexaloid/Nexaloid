@@ -296,7 +296,7 @@ class Tokenizer:
             raw = ctypes.string_at(text_ptr, text_len)
             token = token_ptr.contents
             part = raw[token.start_byte : token.end_byte].decode("utf-8")
-            if part in self._deleted:
+            if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
                 _append_deleted_fallback(out, part, token)
                 return
             out.append(
@@ -334,7 +334,7 @@ class Tokenizer:
             raw = ctypes.string_at(text_ptr, text_len)
             token = token_ptr.contents
             part = raw[token.start_byte : token.end_byte].decode("utf-8")
-            if part in self._deleted:
+            if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
                 _append_deleted_fallback(out[index], part, token)
                 return
             out[index].append(

@@ -81,6 +81,7 @@ pub const Tokenizer = struct {
         // Accurate mode chooses the globally best path, then drops pure whitespace tokens.
         var path = try decoder.decode(self.allocator, &lattice);
         defer path.deinit(self.allocator);
+        try ensureCompletePath(path.items, @intCast(scan_ctx.chars.items.len));
         return filterSpaces(self.allocator, path.items, scan_ctx.chars.items);
     }
 };
@@ -160,6 +161,15 @@ fn edgeLessThan(_: void, a: types.NxEdge, b: types.NxEdge) bool {
     if (a.start_char != b.start_char) return a.start_char < b.start_char;
     if (a.end_char != b.end_char) return a.end_char < b.end_char;
     return a.word_id < b.word_id;
+}
+
+fn ensureCompletePath(edges: []const types.NxEdge, char_len: u32) !void {
+    var cursor: u32 = 0;
+    for (edges) |edge| {
+        if (edge.start_char != cursor or edge.end_char <= edge.start_char) return error.NoPath;
+        cursor = edge.end_char;
+    }
+    if (cursor != char_len) return error.NoPath;
 }
 
 fn filterSpaces(allocator: std.mem.Allocator, edges: []const types.NxEdge, chars: []const types.NxChar) !std.ArrayListUnmanaged(types.NxEdge) {
@@ -282,4 +292,27 @@ test "search mode deduplicates text and skips ascii ngrams" {
         }
     }
     try std.testing.expect(saw_ascii);
+}
+
+test "deleted base word falls back without dropping text" {
+    var tokenizer = try Tokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+    try tokenizer.addBaseWord("火山", 1, 20.0, 0);
+    try tokenizer.addWord("火山", 2, -1_000_000.0, 0);
+
+    var tokens = try tokenizer.tokenize("A火山B");
+    defer tokens.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), tokens.items.len);
+    try std.testing.expectEqual(types.NxSource.base_dict, tokens.items[1].source);
+    try std.testing.expectEqual(@as(u32, 1), tokens.items[1].start_char);
+    try std.testing.expectEqual(@as(u32, 3), tokens.items[1].end_char);
+}
+
+test "complete path invariant rejects gaps" {
+    const edges = [_]types.NxEdge{
+        .{ .start_char = 0, .end_char = 1, .start_byte = 0, .end_byte = 1, .word_id = 0, .score = 0, .pos_id = 0, .source = .unknown },
+        .{ .start_char = 2, .end_char = 3, .start_byte = 2, .end_byte = 3, .word_id = 0, .score = 0, .pos_id = 0, .source = .unknown },
+    };
+    try std.testing.expectError(error.NoPath, ensureCompletePath(&edges, 3));
 }

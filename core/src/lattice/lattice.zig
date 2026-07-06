@@ -4,6 +4,8 @@ const matcher = @import("../matcher/matcher.zig");
 const rule_matcher = @import("../matcher/rule_matcher.zig");
 const trie_mod = @import("../lexicon/trie.zig");
 
+const tombstone_score: f32 = -1_000_000.0;
+
 pub const Lattice = struct {
     allocator: std.mem.Allocator,
     char_len: u32,
@@ -67,14 +69,31 @@ pub fn buildCandidates(
 ) !Lattice {
     var lattice = Lattice.init(allocator, @intCast(chars.len));
     errdefer lattice.deinit();
+    var tombstones: std.ArrayListUnmanaged(Span) = .empty;
+    defer tombstones.deinit(allocator);
 
     // Core owns the graph: dictionary, rule, plugin, and unknown edges all become the same NxEdge shape.
-    try matcher.matchAll(chars, trie, &lattice, struct {
-        fn emit(out: *Lattice, edge: types.NxEdge) !void {
-            try out.addEdge(edge);
+    const UserCtx = struct {
+        allocator: std.mem.Allocator,
+        lattice: *Lattice,
+        tombstones: *std.ArrayListUnmanaged(Span),
+    };
+    var user_ctx = UserCtx{
+        .allocator = allocator,
+        .lattice = &lattice,
+        .tombstones = &tombstones,
+    };
+    try matcher.matchAllSource(chars, user_trie, .user_dict, &user_ctx, struct {
+        fn emit(ctx: *UserCtx, edge: types.NxEdge) !void {
+            if (isTombstone(edge)) {
+                try ctx.tombstones.append(ctx.allocator, .{ .start = edge.start_char, .end = edge.end_char });
+                return;
+            }
+            try ctx.lattice.addEdge(edge);
         }
     }.emit);
-    try matcher.matchAllSource(chars, user_trie, .user_dict, &lattice, struct {
+
+    try matcher.matchAll(chars, trie, &lattice, struct {
         fn emit(out: *Lattice, edge: types.NxEdge) !void {
             try out.addEdge(edge);
         }
@@ -85,6 +104,15 @@ pub fn buildCandidates(
         }
     }.emit);
     return lattice;
+}
+
+const Span = struct {
+    start: u32,
+    end: u32,
+};
+
+fn isTombstone(edge: types.NxEdge) bool {
+    return edge.source == .user_dict and edge.score <= tombstone_score;
 }
 
 pub fn addUnknownFallback(lattice: *Lattice, chars: []const types.NxChar) !void {
@@ -182,4 +210,33 @@ test "build lattice from matcher" {
     }.emit);
 
     try std.testing.expect(ctx.saw_word_20);
+}
+
+test "user tombstone does not suppress base edge with same span" {
+    var trie = try trie_mod.TempTrie.init(std.testing.allocator);
+    defer trie.deinit();
+    try trie.insert("火山", 10, 20.0, 0);
+
+    var user_trie = try trie_mod.TempTrie.init(std.testing.allocator);
+    defer user_trie.deinit();
+    try user_trie.insert("火山", 20, tombstone_score, 0);
+
+    const scanner = @import("../scanner/utf8.zig");
+    const CharCtx = struct {
+        chars: [2]types.NxChar = undefined,
+        count: usize = 0,
+    };
+    var char_ctx = CharCtx{};
+    try scanner.scan("火山", &char_ctx, struct {
+        fn emit(ctx: *CharCtx, ch: types.NxChar) !void {
+            ctx.chars[ctx.count] = ch;
+            ctx.count += 1;
+        }
+    }.emit);
+
+    var lattice = try buildCandidates(std.testing.allocator, char_ctx.chars[0..char_ctx.count], &trie, &user_trie);
+    defer lattice.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), lattice.edgeCount());
+    try std.testing.expectEqual(types.NxSource.base_dict, lattice.edges.items[0].source);
 }

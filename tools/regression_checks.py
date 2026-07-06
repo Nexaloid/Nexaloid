@@ -37,6 +37,19 @@ def expect_error(fn, text: str) -> None:
     raise AssertionError(f"expected error containing {text!r}")
 
 
+def assert_token_coverage(text: str, tokens) -> None:
+    cursor = 0
+    raw = text.encode("utf-8")
+    for token in tokens:
+        if token.start_byte < cursor:
+            raise AssertionError(f"overlapping token at byte {token.start_byte}")
+        if raw[cursor : token.start_byte].decode("utf-8").strip():
+            raise AssertionError(f"uncovered span: {raw[cursor:token.start_byte]!r}")
+        cursor = token.end_byte
+    if raw[cursor:].decode("utf-8").strip():
+        raise AssertionError(f"uncovered tail: {raw[cursor:]!r}")
+
+
 def check_python_close_guard() -> None:
     tokenizer = Tokenizer()
     tokenizer.close()
@@ -83,11 +96,23 @@ def check_del_word_base_falls_back() -> None:
     tokenizer = Tokenizer()
     try:
         tokenizer.del_word("火山")
-        assert tokenizer.lcut("A火山B") == ["A", "火", "山", "B"]
+        tokens = tokenizer.tokenize("A火山B")
+        assert [token.text for token in tokens] == ["A", "火山", "B"]
+        assert_token_coverage("A火山B", tokens)
 
         tokenizer.del_word("南京市")
         tokens = tokenizer.tokenize("A南京市B")
-        assert "".join(token.text for token in tokens) == "A南京市B"
+        assert [token.text for token in tokens] == ["A", "南京市", "B"]
+        assert_token_coverage("A南京市B", tokens)
+    finally:
+        tokenizer.close()
+
+
+def check_token_coverage() -> None:
+    tokenizer = Tokenizer()
+    try:
+        text = "ChatGPT-5.5 支持中文RAG检索。"
+        assert_token_coverage(text, tokenizer.tokenize(text))
     finally:
         tokenizer.close()
 
@@ -114,6 +139,7 @@ def main() -> int:
         check_nxdict_userdict,
         check_del_word_falls_back,
         check_del_word_base_falls_back,
+        check_token_coverage,
         check_version_exported,
         check_repo_dict_preferred,
     ]
