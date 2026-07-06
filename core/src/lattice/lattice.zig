@@ -53,6 +53,18 @@ pub fn buildFromMatcher(
     trie: *const trie_mod.TempTrie,
     user_trie: *const trie_mod.TempTrie,
 ) !Lattice {
+    var lattice = try buildCandidates(allocator, chars, trie, user_trie);
+    errdefer lattice.deinit();
+    try addUnknownFallback(&lattice, chars);
+    return lattice;
+}
+
+pub fn buildCandidates(
+    allocator: std.mem.Allocator,
+    chars: []const types.NxChar,
+    trie: *const trie_mod.TempTrie,
+    user_trie: *const trie_mod.TempTrie,
+) !Lattice {
     var lattice = Lattice.init(allocator, @intCast(chars.len));
     errdefer lattice.deinit();
 
@@ -72,12 +84,10 @@ pub fn buildFromMatcher(
             try out.addEdge(edge);
         }
     }.emit);
-    try addUnknownFallback(&lattice, chars);
-
     return lattice;
 }
 
-fn addUnknownFallback(lattice: *Lattice, chars: []const types.NxChar) !void {
+pub fn addUnknownFallback(lattice: *Lattice, chars: []const types.NxChar) !void {
     // Every char must have a path so Viterbi can always produce a complete token stream.
     for (chars) |ch| {
         try lattice.addEdge(.{

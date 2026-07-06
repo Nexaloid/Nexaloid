@@ -9,6 +9,7 @@ const c = if (builtin.os.tag == .windows) @cImport({
     @cInclude("string.h");
 });
 const tokenizer_mod = @import("tokenizer.zig");
+const plugin_mod = @import("plugin/loader.zig");
 const scanner = @import("scanner/utf8.zig");
 const types = @import("types.zig");
 
@@ -59,6 +60,7 @@ const max_segment_chars = 512;
 pub const NxEngine = struct {
     tokenizer: tokenizer_mod.Tokenizer,
     dict_mapping: ?MappedFile = null,
+    plugins: std.ArrayListUnmanaged(plugin_mod.LoadedPlugin) = .empty,
     // Runtime-added words get stable non-zero ids inside this engine instance.
     next_word_id: u32 = 1,
 };
@@ -88,10 +90,28 @@ export fn nx_engine_new(config: ?*const NxConfig, out_engine: ?*?*NxEngine) call
 
 export fn nx_engine_free(engine: ?*NxEngine) callconv(.c) void {
     if (engine) |ptr| {
+        for (ptr.plugins.items) |*plugin| plugin.close();
+        ptr.plugins.deinit(allocator);
         ptr.tokenizer.deinit();
         if (ptr.dict_mapping) |mapping| mapping.close();
         allocator.destroy(ptr);
     }
+}
+
+export fn nx_load_plugin(
+    engine: ?*NxEngine,
+    plugin_path: ?[*:0]const u8,
+    config_json: ?[*:0]const u8,
+) callconv(.c) NxStatus {
+    const ptr = engine orelse return .invalid_config;
+    const path = plugin_path orelse return .invalid_config;
+    const plugin = plugin_mod.load(path, config_json) catch return .plugin;
+    ptr.plugins.append(allocator, plugin) catch |err| {
+        var owned = plugin;
+        owned.close();
+        return statusFromError(err);
+    };
+    return .ok;
 }
 
 export fn nx_tokenize(
@@ -136,7 +156,8 @@ export fn nx_tokenize_batch(
     }
     for (results) |*result| result.* = .{};
 
-    const workers = workerCount(thread_count, text_count);
+    // ponytail: plugin batch calls are serialized until plugin thread-safety is part of the ABI.
+    const workers = if (ptr.plugins.items.len == 0) workerCount(thread_count, text_count) else 1;
     if (workers == 1) {
         batchWorker(ptr, text_ptrs, lens, results, 0, text_count, checked_mode);
     } else {
@@ -208,6 +229,7 @@ fn statusFromError(err: anyerror) NxStatus {
     return switch (err) {
         error.InvalidUtf8 => .invalid_utf8,
         error.OutOfMemory => .out_of_memory,
+        error.Plugin => .plugin,
         else => .internal,
     };
 }
@@ -221,7 +243,7 @@ fn tokenizeSegmented(
 ) NxStatus {
     var iter = SegmentIter.init(bytes);
     while (iter.next() catch |err| return statusFromError(err)) |segment| {
-        var edges = engine.tokenizer.tokenizeMode(segment.bytes, mode) catch |err| return statusFromError(err);
+        var edges = tokenizeWithPlugins(engine, segment.bytes, mode) catch |err| return statusFromError(err);
         defer edges.deinit(allocator);
         for (edges.items) |edge| {
             const token = toAbiToken(edge, segment.start_byte, segment.start_char);
@@ -239,7 +261,7 @@ fn collectSegmentedTokens(
 ) NxStatus {
     var iter = SegmentIter.init(bytes);
     while (iter.next() catch |err| return statusFromError(err)) |segment| {
-        var edges = engine.tokenizer.tokenizeMode(segment.bytes, mode) catch |err| return statusFromError(err);
+        var edges = tokenizeWithPlugins(engine, segment.bytes, mode) catch |err| return statusFromError(err);
         defer edges.deinit(allocator);
         for (edges.items) |edge| {
             out.append(allocator, toAbiToken(edge, segment.start_byte, segment.start_char)) catch return .out_of_memory;
@@ -260,6 +282,23 @@ fn toAbiToken(edge: types.NxEdge, byte_base: u32, char_base: u32) NxToken {
         .flags = edge.flags,
         .score = edge.score,
     };
+}
+
+fn tokenizeWithPlugins(engine: *NxEngine, bytes: []const u8, mode: tokenizer_mod.Mode) !std.ArrayListUnmanaged(types.NxEdge) {
+    if (engine.plugins.items.len == 0) return engine.tokenizer.tokenizeMode(bytes, mode);
+    return engine.tokenizer.tokenizeModeWithCandidates(bytes, mode, engine, struct {
+        fn add(
+            ptr: *NxEngine,
+            alloc: std.mem.Allocator,
+            text: []const u8,
+            chars: []const types.NxChar,
+            lattice: *@import("lattice/lattice.zig").Lattice,
+        ) !void {
+            for (ptr.plugins.items) |*plugin| {
+                try plugin.addCandidates(alloc, text, chars, lattice);
+            }
+        }
+    }.add);
 }
 
 const Segment = struct {

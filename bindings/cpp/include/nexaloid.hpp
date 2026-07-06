@@ -82,6 +82,13 @@ public:
         }
     }
 
+    void load_plugin(const char* path, const char* config_json = nullptr) {
+        NxStatus status = nx_load_plugin(engine_, path, config_json);
+        if (status != NX_OK) {
+            throw Error(status);
+        }
+    }
+
     std::vector<Token> tokenize(std::string_view text, Mode mode = Mode::Accurate) {
         std::vector<Token> out;
         CallbackData data{&out};

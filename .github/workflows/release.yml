@@ -27,9 +27,35 @@ permissions:
   contents: read
 
 jobs:
+  ci_gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Test Zig core
+        run: zig build test
+        working-directory: core
+      - name: Build native library
+        run: zig build
+        working-directory: core
+      - name: Run regression checks
+        run: python tools/regression_checks.py
+      - name: Run plugin integration checks
+        run: python tools/plugin_integration_checks.py
+
   pypi-build:
     name: Build PyPI wheel (${{ matrix.target.platform }}, Python ${{ matrix.python }})
     if: github.event_name != 'workflow_dispatch' || inputs.publish_pypi
+    needs: ci_gate
     strategy:
       fail-fast: false
       matrix:
@@ -120,6 +146,7 @@ jobs:
   cargo-native-build:
     name: Build Cargo native assets (${{ matrix.target.platform }})
     if: github.event_name != 'workflow_dispatch' || inputs.publish_cargo
+    needs: ci_gate
     strategy:
       fail-fast: false
       matrix:
@@ -187,6 +214,7 @@ jobs:
   npm-build:
     name: Build npm prebuild (${{ matrix.target.platform }})
     if: github.event_name != 'workflow_dispatch' || inputs.publish_npm
+    needs: ci_gate
     strategy:
       fail-fast: false
       matrix:
@@ -282,7 +310,7 @@ jobs:
     name: Write release summary
     runs-on: ubuntu-latest
     if: always()
-    needs: [pypi, cargo, npm]
+    needs: [ci_gate, pypi, cargo, npm]
     steps:
       - name: Write package results
         run: |
@@ -294,4 +322,5 @@ jobs:
             echo "| PyPI | ${{ needs.pypi.result }} |"
             echo "| Cargo | ${{ needs.cargo.result }} |"
             echo "| npm | ${{ needs.npm.result }} |"
+            echo "| CI gate | ${{ needs.ci_gate.result }} |"
           } >> "$GITHUB_STEP_SUMMARY"

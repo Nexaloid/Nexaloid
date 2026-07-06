@@ -1,6 +1,7 @@
 use nexaloid_sys as sys;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct Error {
@@ -74,6 +75,65 @@ impl Tokenizer {
             message: "path contains NUL".to_string(),
         })?;
         check(unsafe { sys::nx_reload_user_dict(self.engine, path.as_ptr()) })
+    }
+
+    pub fn load_plugin(&mut self, path: &str, config_json: Option<&str>) -> Result<(), Error> {
+        let path = CString::new(path).map_err(|_| Error {
+            status: sys::NxStatus::InvalidConfig,
+            message: "path contains NUL".to_string(),
+        })?;
+        let config = match config_json {
+            Some(value) => Some(CString::new(value).map_err(|_| Error {
+                status: sys::NxStatus::InvalidConfig,
+                message: "config_json contains NUL".to_string(),
+            })?),
+            None => None,
+        };
+        check(unsafe {
+            sys::nx_load_plugin(
+                self.engine,
+                path.as_ptr(),
+                config
+                    .as_ref()
+                    .map_or(std::ptr::null(), |value| value.as_ptr()),
+            )
+        })
+    }
+
+    pub fn load_plugins<P: AsRef<Path>>(
+        &mut self,
+        dir: P,
+        config_json: Option<&str>,
+    ) -> Result<(), Error> {
+        let ext = if cfg!(windows) {
+            "dll"
+        } else if cfg!(target_os = "macos") {
+            "dylib"
+        } else {
+            "so"
+        };
+        let mut paths = std::fs::read_dir(dir)
+            .map_err(|err| Error {
+                status: sys::NxStatus::Io,
+                message: err.to_string(),
+            })?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.is_file()
+                    && path
+                        .file_name()
+                        .and_then(|value| value.to_str())
+                        .is_some_and(|name| name.starts_with("nexaloid_plugin"))
+                    && path.extension().and_then(|value| value.to_str()) == Some(ext)
+            })
+            .collect::<Vec<_>>();
+        paths.sort();
+        for path in paths {
+            let path = path.to_string_lossy();
+            self.load_plugin(&path, config_json)?;
+        }
+        Ok(())
     }
 
     pub fn tokenize(&self, text: &str, mode: Mode) -> Result<Vec<Token>, Error> {

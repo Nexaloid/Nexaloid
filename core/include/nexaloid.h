@@ -98,6 +98,10 @@ NxStatus nx_engine_new(const NxConfig *config, NxEngine **out_engine);
 /* Free an engine. NULL is allowed. */
 void nx_engine_free(NxEngine *engine);
 
+/* Load a CandidateProvider plugin dynamic library into an engine.
+   config_json may be NULL. Loaded plugins are released by nx_engine_free. */
+NxStatus nx_load_plugin(NxEngine *engine, const char *plugin_path, const char *config_json);
+
 /* Tokenize one UTF-8 byte slice. text does not need to be NUL-terminated.
    Concurrent tokenization on one engine is allowed; do not call nx_add_word or
    nx_reload_user_dict concurrently with tokenization on the same engine. */

@@ -218,16 +218,56 @@ static napi_value tokenizer_load_userdict(napi_env env, napi_callback_info info)
   return NULL;
 }
 
+static napi_value tokenizer_load_plugin(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value args[2];
+  napi_value self;
+  napi_get_cb_info(env, info, &argc, args, &self, NULL);
+
+  NodeTokenizer *tokenizer = NULL;
+  napi_unwrap(env, self, (void **)&tokenizer);
+  if (tokenizer == NULL || tokenizer->engine == NULL) {
+    napi_throw_error(env, NULL, "tokenizer is closed");
+    return NULL;
+  }
+
+  char *path = NULL;
+  size_t path_len = 0;
+  if (argc == 0 || !get_string_arg(env, args[0], &path, &path_len)) {
+    napi_throw_type_error(env, NULL, "path must be a string");
+    return NULL;
+  }
+
+  char *config = NULL;
+  size_t config_len = 0;
+  if (argc > 1) {
+    if (!get_string_arg(env, args[1], &config, &config_len)) {
+      free(path);
+      napi_throw_type_error(env, NULL, "config must be a string");
+      return NULL;
+    }
+  }
+
+  (void)path_len;
+  (void)config_len;
+  NxStatus status = nx_load_plugin(tokenizer->engine, path, config);
+  free(path);
+  free(config);
+  if (status != NX_OK) return throw_status(env, status);
+  return NULL;
+}
+
 static napi_value init(napi_env env, napi_value exports) {
   napi_property_descriptor methods[] = {
     {"tokenize", NULL, tokenizer_tokenize, NULL, NULL, NULL, napi_default, NULL},
     {"close", NULL, tokenizer_close, NULL, NULL, NULL, napi_default, NULL},
     {"addWord", NULL, tokenizer_add_word, NULL, NULL, NULL, napi_default, NULL},
-    {"loadUserdict", NULL, tokenizer_load_userdict, NULL, NULL, NULL, napi_default, NULL}
+    {"loadUserdict", NULL, tokenizer_load_userdict, NULL, NULL, NULL, napi_default, NULL},
+    {"loadPlugin", NULL, tokenizer_load_plugin, NULL, NULL, NULL, napi_default, NULL}
   };
 
   napi_value ctor;
-  napi_define_class(env, "Tokenizer", NAPI_AUTO_LENGTH, tokenizer_new, NULL, 4, methods, &ctor);
+  napi_define_class(env, "Tokenizer", NAPI_AUTO_LENGTH, tokenizer_new, NULL, 5, methods, &ctor);
   napi_create_reference(env, ctor, 1, &tokenizer_ctor);
   napi_set_named_property(env, exports, "Tokenizer", ctor);
   return exports;

@@ -94,6 +94,11 @@ extern "C" {
         callback: NxTokenCallback,
         user_data: *mut c_void,
     ) -> NxStatus;
+    pub fn nx_load_plugin(
+        engine: *mut NxEngine,
+        plugin_path: *const c_char,
+        config_json: *const c_char,
+    ) -> NxStatus;
     pub fn nx_add_word(
         engine: *mut NxEngine,
         word: *const c_char,

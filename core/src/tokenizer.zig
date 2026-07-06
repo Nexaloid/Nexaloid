@@ -52,6 +52,12 @@ pub const Tokenizer = struct {
     }
 
     pub fn tokenizeMode(self: *const Tokenizer, text: []const u8, mode: Mode) !std.ArrayListUnmanaged(types.NxEdge) {
+        return self.tokenizeModeWithCandidates(text, mode, {}, struct {
+            fn add(_: void, _: std.mem.Allocator, _: []const u8, _: []const types.NxChar, _: *lattice_mod.Lattice) !void {}
+        }.add);
+    }
+
+    pub fn tokenizeModeWithCandidates(self: *const Tokenizer, text: []const u8, mode: Mode, candidate_ctx: anytype, comptime addCandidates: anytype) !std.ArrayListUnmanaged(types.NxEdge) {
         const ScanCtx = struct {
             allocator: std.mem.Allocator,
             chars: std.ArrayListUnmanaged(types.NxChar) = .empty,
@@ -66,9 +72,11 @@ pub const Tokenizer = struct {
             }
         }.emit);
 
-        // Matcher output, rule terms, and unknown fallback are merged into one lattice.
-        var lattice = try lattice_mod.buildFromMatcher(self.allocator, scan_ctx.chars.items, &self.trie, &self.user_trie);
+        // Matcher output, rule terms, plugin candidates, and unknown fallback become one lattice.
+        var lattice = try lattice_mod.buildCandidates(self.allocator, scan_ctx.chars.items, &self.trie, &self.user_trie);
         defer lattice.deinit();
+        try addCandidates(candidate_ctx, self.allocator, text, scan_ctx.chars.items, &lattice);
+        try lattice_mod.addUnknownFallback(&lattice, scan_ctx.chars.items);
         if (mode == .search) return searchTokens(self.allocator, &lattice, scan_ctx.chars.items);
         // Accurate mode chooses the globally best path, then drops pure whitespace tokens.
         var path = try decoder.decode(self.allocator, &lattice);

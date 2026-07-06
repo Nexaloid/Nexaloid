@@ -17,6 +17,11 @@ import "C"
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strings"
 	"unsafe"
 )
 
@@ -72,6 +77,48 @@ func (t *Tokenizer) AddWord(word string, score float32) error {
 	defer C.free(unsafe.Pointer(cWord))
 	if status := C.nx_add_word(t.engine, cWord, C.size_t(len([]byte(word))), 0, C.float(score), 0); status != C.NX_OK {
 		return statusError(status)
+	}
+	return nil
+}
+
+func (t *Tokenizer) LoadPlugin(path string, configJSON string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	var cConfig *C.char
+	if configJSON != "" {
+		cConfig = C.CString(configJSON)
+		defer C.free(unsafe.Pointer(cConfig))
+	}
+	if status := C.nx_load_plugin(t.engine, cPath, cConfig); status != C.NX_OK {
+		return statusError(status)
+	}
+	return nil
+}
+
+func (t *Tokenizer) LoadPlugins(dir string, configJSON string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	ext := ".so"
+	if runtime.GOOS == "windows" {
+		ext = ".dll"
+	} else if runtime.GOOS == "darwin" {
+		ext = ".dylib"
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.Type().IsRegular() || !strings.HasPrefix(name, "nexaloid_plugin") || !strings.HasSuffix(name, ext) {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := t.LoadPlugin(filepath.Join(dir, name), configJSON); err != nil {
+			return err
+		}
 	}
 	return nil
 }

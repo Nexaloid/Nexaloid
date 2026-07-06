@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import sys
 from enum import IntEnum
 from pathlib import Path
 
@@ -102,6 +103,22 @@ def _resolve_domain_dict_path(domain: str | None) -> Path | None:
     raise FileNotFoundError(f"domain dictionary not found: {root / (domain + '.tsv')}")
 
 
+def _plugin_extension() -> str:
+    if sys.platform == "win32":
+        return ".dll"
+    if sys.platform == "darwin":
+        return ".dylib"
+    return ".so"
+
+
+def _iter_plugin_paths(path: str | os.PathLike[str]):
+    root = Path(path)
+    suffix = _plugin_extension()
+    for candidate in sorted(root.iterdir()):
+        if candidate.is_file() and candidate.name.startswith("nexaloid_plugin") and candidate.name.endswith(suffix):
+            yield candidate
+
+
 def _load_lib() -> ctypes.CDLL:
     # Bindings are thin wrappers; the native shared library does all tokenization.
     explicit = os.environ.get("NEXALOID_LIB")
@@ -128,6 +145,8 @@ _LIB.nx_engine_new.argtypes = [ctypes.POINTER(_NxConfig), ctypes.POINTER(ctypes.
 _LIB.nx_engine_new.restype = ctypes.c_int
 _LIB.nx_engine_free.argtypes = [ctypes.c_void_p]
 _LIB.nx_engine_free.restype = None
+_LIB.nx_load_plugin.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+_LIB.nx_load_plugin.restype = ctypes.c_int
 _LIB.nx_tokenize.argtypes = [
     ctypes.c_void_p,
     ctypes.c_char_p,
@@ -173,6 +192,8 @@ class Tokenizer:
         dict_path: str | os.PathLike[str] | None = None,
         *,
         domain: str | None = None,
+        plugin_dir: str | os.PathLike[str] | None = None,
+        plugin_config_json: str | None = None,
     ):
         self._engine = ctypes.c_void_p()
         config = _NxConfig()
@@ -186,6 +207,8 @@ class Tokenizer:
         self._closed = False
         self._words: dict[str, float] = {}
         self._deleted: set[str] = set()
+        if plugin_dir is not None:
+            self.load_plugins(plugin_dir, plugin_config_json)
 
     def close(self) -> None:
         if not self._closed:
@@ -218,6 +241,17 @@ class Tokenizer:
         self._ensure_open()
         data = str(Path(path)).encode("utf-8")
         self._check(_LIB.nx_reload_user_dict(self._engine, data))
+
+    def load_plugin(self, path: str | os.PathLike[str], config_json: str | None = None) -> None:
+        self._ensure_open()
+        path_data = str(Path(path)).encode("utf-8")
+        config_data = None if config_json is None else config_json.encode("utf-8")
+        self._check(_LIB.nx_load_plugin(self._engine, path_data, config_data))
+
+    def load_plugins(self, path: str | os.PathLike[str], config_json: str | None = None) -> None:
+        self._ensure_open()
+        for plugin_path in _iter_plugin_paths(path):
+            self.load_plugin(plugin_path, config_json)
 
     def suggest_freq(self, segment, tune: bool = False):
         word = "".join(segment) if isinstance(segment, tuple) else str(segment)

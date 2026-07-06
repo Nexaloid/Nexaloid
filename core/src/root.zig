@@ -5,6 +5,7 @@ pub const matcher = @import("matcher/matcher.zig");
 pub const rule_matcher = @import("matcher/rule_matcher.zig");
 pub const lattice = @import("lattice/lattice.zig");
 pub const decoder = @import("decoder/viterbi.zig");
+pub const plugin = @import("plugin/loader.zig");
 pub const tokenizer = @import("tokenizer.zig");
 
 test {
@@ -15,5 +16,6 @@ test {
     _ = rule_matcher;
     _ = lattice;
     _ = decoder;
+    _ = plugin;
     _ = tokenizer;
 }
