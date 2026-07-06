@@ -89,6 +89,7 @@ jobs:
         run: python tools/plugin_integration_checks.py
       - name: Regression test C binding
         run: |
+          mkdir -p .zig-cache
           cc -std=c11 -Icore/include bindings/c/tests/regression.c -Lcore/zig-out/lib -lnexaloid -o .zig-cache/c-regression
           .zig-cache/c-regression
       - name: Regression test C++ binding
