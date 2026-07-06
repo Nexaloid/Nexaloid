@@ -105,7 +105,7 @@ export fn nx_load_plugin(
 ) callconv(.c) NxStatus {
     const ptr = engine orelse return .invalid_config;
     const path = plugin_path orelse return .invalid_config;
-    const plugin = plugin_mod.load(path, config_json) catch return .plugin;
+    const plugin = plugin_mod.load(allocator, path, config_json) catch return .plugin;
     ptr.plugins.append(allocator, plugin) catch |err| {
         var owned = plugin;
         owned.close();
@@ -229,7 +229,17 @@ fn statusFromError(err: anyerror) NxStatus {
     return switch (err) {
         error.InvalidUtf8 => .invalid_utf8,
         error.OutOfMemory => .out_of_memory,
-        error.Plugin => .plugin,
+        error.Plugin,
+        error.PluginOpenFailed,
+        error.PluginSymbolMissing,
+        error.PluginInitFailed,
+        error.PluginInfoFailed,
+        error.PluginAbiMismatch,
+        error.PluginKindMismatch,
+        error.PluginProvideFailed,
+        error.PluginCandidateInvalid,
+        error.PluginInputTooLarge,
+        => .plugin,
         else => .internal,
     };
 }

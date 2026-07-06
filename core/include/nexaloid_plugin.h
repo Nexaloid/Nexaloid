@@ -41,7 +41,9 @@ typedef struct {
     uint32_t char_len;
 } NxPluginInput;
 
-/* Plugin candidates use char offsets; core maps them back to byte offsets. */
+/* Plugin candidates use char offsets; core maps them back to byte offsets.
+   source is reserved for plugin-internal provenance; host token output reports
+   loaded candidates as NX_SOURCE_PLUGIN. Use flags for plugin-defined subtypes. */
 typedef struct {
     uint32_t start_char;
     uint32_t end_char;
@@ -50,7 +52,9 @@ typedef struct {
     uint16_t flags;
 } NxPluginCandidate;
 
-/* Plugins stream candidates through callbacks to avoid cross-ABI array ownership. */
+/* Plugins stream candidates through callbacks to avoid cross-ABI array ownership.
+   The callback is synchronous-only: plugins must not store callback or user_data
+   after nx_plugin_provide_candidates returns. */
 typedef void (*NxPluginCandidateCallback)(
     const NxPluginCandidate *candidate,
     void *user_data
