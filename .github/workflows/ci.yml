@@ -233,6 +233,48 @@ jobs:
       - name: Package native SDK
         run: python tools/package_native_sdk.py --version 0.0.0-ci --platform ${{ matrix.target.platform }} --language all --out-dir dist/native-ci
 
+  linux-qemu-runtime-regression:
+    name: Linux QEMU runtime regression (${{ matrix.target.platform }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - platform: linux-arm64
+            zig_target: aarch64-linux-musl
+            docker_platform: linux/arm64
+          - platform: linux-armv7
+            zig_target: arm-linux-musleabihf
+            docker_platform: linux/arm/v7
+          - platform: riscv64
+            zig_target: riscv64-linux-musl
+            docker_platform: linux/riscv64
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: ./.github/actions/setup-zig
+        with:
+          version: 0.16.0
+      - name: Set up QEMU binfmt
+        run: docker run --privileged --rm tonistiigi/binfmt --install arm64,arm,riscv64
+      - name: Cross-build native library
+        run: zig build -Dtarget=${{ matrix.target.zig_target }}
+        working-directory: core
+      - name: Cross-build C regression
+        run: |
+          mkdir -p .zig-cache/qemu
+          zig cc -target ${{ matrix.target.zig_target }} -std=c11 -Icore/include bindings/c/tests/regression.c -Lcore/zig-out/lib -lnexaloid -o .zig-cache/qemu/c-regression
+      - name: Run C regression under QEMU
+        run: |
+          docker run --rm \
+            --platform ${{ matrix.target.docker_platform }} \
+            -v "$PWD:/work" \
+            -w /work \
+            -e LD_LIBRARY_PATH=/work/core/zig-out/lib \
+            alpine:3.20 \
+            /work/.zig-cache/qemu/c-regression
+
   python-versions:
     name: Python ${{ matrix.python }} compatibility
     runs-on: ubuntu-latest
