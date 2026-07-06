@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -11,15 +10,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def native_libs() -> list[Path]:
-    if sys.platform == "win32":
-        return [
-            ROOT / "core" / "zig-out" / "bin" / "nexaloid.dll",
-            ROOT / "core" / "zig-out" / "lib" / "nexaloid.lib",
-        ]
-    if sys.platform == "darwin":
-        return [ROOT / "core" / "zig-out" / "lib" / "libnexaloid.dylib"]
-    return [ROOT / "core" / "zig-out" / "lib" / "libnexaloid.so"]
+def native_libs(platform: str) -> list[Path]:
+    if platform.startswith("windows-"):
+        names = ("nexaloid.dll", "nexaloid.lib", "libnexaloid.dll.a")
+    elif platform.startswith("darwin-"):
+        names = ("libnexaloid.dylib",)
+    else:
+        names = ("libnexaloid.so",)
+
+    libs = [path for name in names for path in (ROOT / "core" / "zig-out").rglob(name)]
+    if not libs:
+        raise FileNotFoundError(f"native library for {platform} under core/zig-out")
+    return libs
 
 
 def copy(src: Path, dst: Path) -> None:
@@ -101,7 +103,7 @@ def package(version: str, platform: str, out_dir: Path, language: str) -> Path:
         write_package_readme(root, version, platform, language)
         copy_language_files(language, root)
         copy(ROOT / "data" / "dict" / "nexaloid.nxdict", root / "data" / "dict" / "nexaloid.nxdict")
-        for lib in native_libs():
+        for lib in native_libs(platform):
             copy(lib, root / "lib" / lib.name)
 
         out = out_dir / f"{name}.zip"

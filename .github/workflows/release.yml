@@ -154,7 +154,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: *release-targets
+        target:
+          - os: ubuntu-latest
+            platform: linux-x64
+            zig_target: x86_64-linux-gnu
+          - os: ubuntu-latest
+            platform: windows-x64
+            zig_target: x86_64-windows-gnu
+          - os: ubuntu-latest
+            platform: darwin-x64
+            zig_target: x86_64-macos
+          - os: ubuntu-latest
+            platform: darwin-arm64
+            zig_target: aarch64-macos
+          - os: ubuntu-latest
+            platform: linux-arm64
+            zig_target: aarch64-linux-gnu
+          - os: ubuntu-latest
+            platform: windows-arm64
+            zig_target: aarch64-windows-gnu
+          - os: ubuntu-latest
+            platform: linux-musl
+            zig_target: x86_64-linux-musl
+          - os: ubuntu-latest
+            platform: linux-armv7
+            zig_target: arm-linux-musleabihf
+          - os: ubuntu-latest
+            platform: riscv64
+            zig_target: riscv64-linux-gnu
     runs-on: ${{ matrix.target.os }}
     steps:
       - name: Check out repository
@@ -168,7 +195,7 @@ jobs:
         with:
           version: 0.16.0
       - name: Build native library
-        run: zig build
+        run: zig build -Dtarget=${{ matrix.target.zig_target }}
         working-directory: ${{ github.workspace }}/core
       - name: Package native SDK
         shell: bash

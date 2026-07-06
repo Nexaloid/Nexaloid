@@ -191,6 +191,48 @@ jobs:
       - name: Regression test packed npm package
         run: python tools/npm_package_regression.py
 
+  native-sdk-cross-build:
+    name: Native SDK cross-build (${{ matrix.target.platform }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - platform: linux-x64
+            zig_target: x86_64-linux-gnu
+          - platform: windows-x64
+            zig_target: x86_64-windows-gnu
+          - platform: darwin-x64
+            zig_target: x86_64-macos
+          - platform: darwin-arm64
+            zig_target: aarch64-macos
+          - platform: linux-arm64
+            zig_target: aarch64-linux-gnu
+          - platform: windows-arm64
+            zig_target: aarch64-windows-gnu
+          - platform: linux-musl
+            zig_target: x86_64-linux-musl
+          - platform: linux-armv7
+            zig_target: arm-linux-musleabihf
+          - platform: riscv64
+            zig_target: riscv64-linux-gnu
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: ./.github/actions/setup-zig
+        with:
+          version: 0.16.0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Cross-build native library
+        run: zig build -Dtarget=${{ matrix.target.zig_target }}
+        working-directory: core
+      - name: Package native SDK
+        run: python tools/package_native_sdk.py --version 0.0.0-ci --platform ${{ matrix.target.platform }} --language all --out-dir dist/native-ci
+
   python-versions:
     name: Python ${{ matrix.python }} compatibility
     runs-on: ubuntu-latest
