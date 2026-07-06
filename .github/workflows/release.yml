@@ -362,13 +362,23 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal
       - name: Publish nexaloid-sys crate
-        run: cargo publish --allow-dirty --manifest-path bindings/rust/nexaloid-sys/Cargo.toml
+        run: |
+          for attempt in 1 2 3; do
+            cargo publish --allow-dirty --manifest-path bindings/rust/nexaloid-sys/Cargo.toml && exit 0
+            sleep $((attempt * 30))
+          done
+          exit 1
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for nexaloid-sys index
         run: sleep 30
       - name: Publish nexaloid crate
-        run: cargo publish --allow-dirty --manifest-path bindings/rust/nexaloid/Cargo.toml
+        run: |
+          for attempt in 1 2 3; do
+            cargo publish --allow-dirty --manifest-path bindings/rust/nexaloid/Cargo.toml && exit 0
+            sleep $((attempt * 30))
+          done
+          exit 1
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
