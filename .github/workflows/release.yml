@@ -171,6 +171,7 @@ jobs:
         run: zig build
         working-directory: ${{ github.workspace }}/core
       - name: Package native SDK
+        shell: bash
         run: |
           for language in all c cpp zig; do
             python tools/package_native_sdk.py \
