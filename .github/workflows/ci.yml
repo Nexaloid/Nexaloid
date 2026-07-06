@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  package-smoke:
-    name: Package smoke (${{ matrix.platform }})
+  package-regression:
+    name: Package regression (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:
@@ -81,24 +81,24 @@ jobs:
       - name: Install Python wheel
         run: python -m pip install --force-reinstall bindings/python/dist/*.whl
         shell: bash
-      - name: Smoke test Python binding
+      - name: Regression test Python binding
         run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
       - name: Run regression checks
         run: python tools/regression_checks.py
       - name: Run plugin integration checks
         run: python tools/plugin_integration_checks.py
-      - name: Smoke test C binding
+      - name: Regression test C binding
         run: |
-          cc -std=c11 -Icore/include bindings/c/examples/smoke.c -Lcore/zig-out/lib -lnexaloid -o .zig-cache/c-smoke
-          .zig-cache/c-smoke
-      - name: Smoke test C++ binding
+          cc -std=c11 -Icore/include bindings/c/tests/regression.c -Lcore/zig-out/lib -lnexaloid -o .zig-cache/c-regression
+          .zig-cache/c-regression
+      - name: Regression test C++ binding
         run: |
-          c++ -std=c++17 -Ibindings/cpp/include -Icore/include bindings/cpp/examples/smoke.cpp -Lcore/zig-out/lib -lnexaloid -o .zig-cache/cpp-smoke
-          .zig-cache/cpp-smoke
-      - name: Smoke test Zig binding
+          c++ -std=c++17 -Ibindings/cpp/include -Icore/include bindings/cpp/tests/regression.cpp -Lcore/zig-out/lib -lnexaloid -o .zig-cache/cpp-regression
+          .zig-cache/cpp-regression
+      - name: Regression test Zig binding
         run: |
-          zig build-exe bindings/zig/examples/smoke.zig -Icore/include -Lcore/zig-out/lib -lnexaloid -lc
-          ./smoke
+          zig build-exe bindings/zig/tests/regression.zig -Icore/include -Lcore/zig-out/lib -lnexaloid -lc
+          ./regression
       - name: Test Rust binding
         run: cargo test --manifest-path bindings/rust/nexaloid/Cargo.toml
         env:
@@ -114,11 +114,11 @@ jobs:
       - name: Check npm package contents
         run: npm pack --dry-run
         working-directory: bindings/node
-      - name: Smoke test Node.js binding
-        run: npm run smoke
+      - name: Regression test Node.js binding
+        run: npm run test:binding
         working-directory: bindings/node
-      - name: Smoke test packed npm package
-        run: python tools/smoke_npm_package.py
+      - name: Regression test packed npm package
+        run: python tools/npm_package_regression.py
 
   python-versions:
     name: Python ${{ matrix.python }} compatibility
@@ -160,7 +160,7 @@ jobs:
       - name: Install Python wheel
         run: python -m pip install --force-reinstall bindings/python/dist/*.whl
         shell: bash
-      - name: Smoke test Python binding
+      - name: Regression test Python binding
         run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
 
   node-versions:
@@ -199,8 +199,8 @@ jobs:
           sudo apt-get install -y patchelf
       - name: Stage Node.js prebuild
         run: python tools/stage_assets.py --node-addon
-      - name: Smoke test Node.js binding
-        run: npm run smoke
+      - name: Regression test Node.js binding
+        run: npm run test:binding
         working-directory: bindings/node
-      - name: Smoke test packed npm package
-        run: python tools/smoke_npm_package.py
+      - name: Regression test packed npm package
+        run: python tools/npm_package_regression.py

@@ -64,7 +64,7 @@ tokenizer.close();
 ```powershell
 cd bindings/node
 npm run build
-npm run smoke
+npm run test:binding
 ```
 
 ### C++
@@ -205,7 +205,7 @@ rtk zig build          # compile the shared library
 rtk zig build test     # run core tests
 cd ..
 
-# Python smoke tests
+# Python regression tests
 $env:PYTHONPATH = "$PWD\bindings\python\src"
 python tools\badcase_runner.py
 python tools\validate_overlay.py
@@ -228,10 +228,18 @@ python tools\benchmark.py -n 1000
 
 | Language | Directory | Status |
 |----------|-----------|--------|
+| C | `core/include/` | Stable C ABI |
 | Python | `bindings/python/` | jieba-compatible API, batch support |
 | Node.js | `bindings/node/` | N-API native addon |
 | C++ | `bindings/cpp/` | RAII wrapper, header-only |
 | Go | `bindings/go/` | cgo binding |
 | Rust | `bindings/rust/` | safe wrapper + `-sys` crate |
 
-C, C++, Go, and Zig users can consume the native SDK zip files attached to GitHub Releases. Each SDK contains headers, the platform native library, and `data/dict/nexaloid.nxdict`.
+C, C++, and Zig users can consume language-specific native SDK zip files attached to GitHub Releases:
+
+- `nexaloid-c-<version>-<platform>.zip`
+- `nexaloid-cpp-<version>-<platform>.zip`
+- `nexaloid-zig-<version>-<platform>.zip`
+- `nexaloid-<version>-<platform>.zip` remains the combined native SDK
+
+Each SDK contains headers, the platform native library, examples, and `data/dict/nexaloid.nxdict`. Release branches `release/c`, `release/cpp`, and `release/zig` track the latest released language entry files; copy the matching release asset's `lib/` directory into the checkout to run examples.

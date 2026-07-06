@@ -17,7 +17,7 @@ tokenizer.cutForSearch("中国科学院计算技术研究所");
 ```powershell
 cd bindings/node
 npm run build
-npm run smoke
+npm run test:binding
 ```
 
 The binding calls:

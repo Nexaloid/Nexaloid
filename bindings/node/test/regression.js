@@ -25,5 +25,5 @@ assertWords("我爱北京天安门", ["我", "爱", "北京", "天安门"]);
 assertWords("长春市长春节前发表讲话", ["长春", "市长", "春节前", "发表", "讲话"]);
 assertSearch("ChatGPT-5.5支持中文RAG检索。", ["ChatGPT-5.5", "中文", "RAG", "检索"], ["Ch", "Cha", "ha"]);
 
-console.log("node smoke passed");
+console.log("node regression passed");
 tokenizer.close();

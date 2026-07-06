@@ -50,6 +50,6 @@ int main(void) {
     expect(engine, "长春市长春节前发表讲话", ambiguous, 5);
 
     nx_engine_free(engine);
-    puts("c smoke passed");
+    puts("c regression passed");
     return 0;
 }

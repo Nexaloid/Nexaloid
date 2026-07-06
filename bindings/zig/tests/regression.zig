@@ -41,5 +41,5 @@ pub fn main() !void {
     try expect(engine.?, "我爱北京天安门", &.{ "我", "爱", "北京", "天安门" });
     try expect(engine.?, "长春市长春节前发表讲话", &.{ "长春", "市长", "春节前", "发表", "讲话" });
 
-    std.debug.print("zig smoke passed\n", .{});
+    std.debug.print("zig regression passed\n", .{});
 }

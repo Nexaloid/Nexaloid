@@ -33,6 +33,6 @@ int main() {
     if (!saw_ascii) {
         throw std::runtime_error("missing ascii search token");
     }
-    std::cout << "cpp smoke passed\n";
+    std::cout << "cpp regression passed\n";
     return 0;
 }

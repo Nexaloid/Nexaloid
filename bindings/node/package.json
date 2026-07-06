@@ -12,7 +12,7 @@
   "scripts": {
     "build": "node-gyp rebuild",
     "install": "node scripts/check-prebuild.js",
-    "smoke": "node examples/smoke.js"
+    "test:binding": "node test/regression.js"
   },
   "gypfile": true
 }
