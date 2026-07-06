@@ -214,3 +214,43 @@ fn check(status: sys::NxStatus) -> Result<(), Error> {
     };
     Err(Error { status, message })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Mode, Tokenizer};
+
+    fn texts(tokens: Vec<super::Token>) -> Vec<String> {
+        tokens.into_iter().map(|token| token.text).collect()
+    }
+
+    #[test]
+    fn regression_cases() {
+        let tokenizer = Tokenizer::new_default().unwrap();
+        let cases = [
+            (
+                "南京市长江大桥",
+                vec!["南京市", "长江大桥"],
+            ),
+            (
+                "我们在日本东京做RAG中文检索实验",
+                vec!["我们", "在", "日本", "东京", "做", "RAG", "中文", "检索", "实验"],
+            ),
+            ("我爱北京天安门", vec!["我", "爱", "北京", "天安门"]),
+            (
+                "长春市长春节前发表讲话",
+                vec!["长春", "市长", "春节前", "发表", "讲话"],
+            ),
+        ];
+        for (text, expected) in cases {
+            assert_eq!(texts(tokenizer.tokenize(text, Mode::Accurate).unwrap()), expected);
+        }
+
+        let search = texts(tokenizer.tokenize("ChatGPT-5.5支持中文RAG检索。", Mode::Search).unwrap());
+        for word in ["ChatGPT-5.5", "中文", "RAG", "检索"] {
+            assert!(search.iter().any(|item| item == word), "missing {word}: {search:?}");
+        }
+        for word in ["Ch", "Cha", "ha"] {
+            assert!(!search.iter().any(|item| item == word), "unexpected {word}: {search:?}");
+        }
+    }
+}

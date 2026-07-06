@@ -87,6 +87,10 @@ jobs:
         run: python tools/regression_checks.py
       - name: Run plugin integration checks
         run: python tools/plugin_integration_checks.py
+      - name: Smoke test C++ binding
+        run: |
+          c++ -std=c++17 -Ibindings/cpp/include -Icore/include bindings/cpp/examples/smoke.cpp -Lcore/zig-out/lib -lnexaloid -o .zig-cache/cpp-smoke
+          .zig-cache/cpp-smoke
       - name: Test Rust binding
         run: cargo test --manifest-path bindings/rust/nexaloid/Cargo.toml
         env:
