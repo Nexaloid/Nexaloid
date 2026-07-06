@@ -10,16 +10,14 @@ on:
 permissions:
   contents: read
 
+env:
+  LD_LIBRARY_PATH: ${{ github.workspace }}/core/zig-out/lib
+  DYLD_LIBRARY_PATH: ${{ github.workspace }}/core/zig-out/lib
+
 jobs:
-  package-regression:
-    name: Package regression (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x64
-    runs-on: ${{ matrix.os }}
+  core-regression:
+    name: Core regression
+    runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -31,37 +29,34 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.22"
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          package-manager-cache: false
-      - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal
       - name: Test Zig core
         run: zig build test
         working-directory: core
       - name: Build native library
         run: zig build
         working-directory: core
-      - name: Export native library paths
-        shell: bash
-        run: |
-          python - <<'PY'
-          import os
-          import pathlib
+      - name: Run regression checks
+        run: python tools/regression_checks.py
+      - name: Run plugin integration checks
+        run: python tools/plugin_integration_checks.py
 
-          root = pathlib.Path(os.environ["GITHUB_WORKSPACE"])
-          pathlib.Path(os.environ["GITHUB_PATH"]).open("a", encoding="utf-8").write(str(root / "core/zig-out/bin") + "\n")
-          pathlib.Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8").write(
-              f"LD_LIBRARY_PATH={root / 'core/zig-out/lib'}\n"
-              f"DYLD_LIBRARY_PATH={root / 'core/zig-out/lib'}\n"
-          )
-          PY
+  python-package-regression:
+    name: Python package regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: ./.github/actions/setup-zig
+        with:
+          version: 0.16.0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Build native library
+        run: zig build
+        working-directory: core
       - name: Install Python build tools
         run: python -m pip install -U build
       - name: Stage package assets
@@ -70,7 +65,6 @@ jobs:
         run: python -m build
         working-directory: bindings/python
       - name: Repair Linux wheel
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y patchelf
@@ -83,30 +77,105 @@ jobs:
         shell: bash
       - name: Regression test Python binding
         run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
-      - name: Run regression checks
-        run: python tools/regression_checks.py
-      - name: Run plugin integration checks
-        run: python tools/plugin_integration_checks.py
+
+  native-binding-regression:
+    name: Native binding regression (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [c, cpp, zig]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: ./.github/actions/setup-zig
+        with:
+          version: 0.16.0
+      - name: Build native library
+        run: zig build
+        working-directory: core
       - name: Regression test C binding
+        if: matrix.language == 'c'
         run: |
           mkdir -p .zig-cache
           cc -std=c11 -Icore/include bindings/c/tests/regression.c -Lcore/zig-out/lib -lnexaloid -o .zig-cache/c-regression
           .zig-cache/c-regression
       - name: Regression test C++ binding
+        if: matrix.language == 'cpp'
         run: |
+          mkdir -p .zig-cache
           c++ -std=c++17 -Ibindings/cpp/include -Icore/include bindings/cpp/tests/regression.cpp -Lcore/zig-out/lib -lnexaloid -o .zig-cache/cpp-regression
           .zig-cache/cpp-regression
       - name: Regression test Zig binding
+        if: matrix.language == 'zig'
         run: |
           zig build-exe bindings/zig/tests/regression.zig -Icore/include -Lcore/zig-out/lib -lnexaloid -lc
           ./regression
+
+  rust-regression:
+    name: Rust binding regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: ./.github/actions/setup-zig
+        with:
+          version: 0.16.0
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Build native library
+        run: zig build
+        working-directory: core
       - name: Test Rust binding
         run: cargo test --manifest-path bindings/rust/nexaloid/Cargo.toml
         env:
           RUSTFLAGS: -L native=${{ github.workspace }}/core/zig-out/lib
+
+  go-regression:
+    name: Go binding regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: ./.github/actions/setup-zig
+        with:
+          version: 0.16.0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+      - name: Build native library
+        run: zig build
+        working-directory: core
       - name: Test Go binding
         run: go test ./nexaloid
         working-directory: bindings/go
+
+  node-package-regression:
+    name: Node.js package regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Zig
+        uses: ./.github/actions/setup-zig
+        with:
+          version: 0.16.0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Build native library
+        run: zig build
+        working-directory: core
       - name: Build Node.js addon
         run: npm run build
         working-directory: bindings/node
