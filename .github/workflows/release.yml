@@ -258,7 +258,7 @@ jobs:
               git checkout --orphan "$branch"
             fi
 
-            git rm -r --ignore-unmatch .
+            git rm -r -f --ignore-unmatch .
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
             cp -a "$tmp"/. .
             git add .
