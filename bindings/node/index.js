@@ -18,7 +18,7 @@ const repoDict = path.join(root, "data", "dict", "nexaloid.tsv");
 // JavaScript stays as a convenience shell; segmentation is implemented by the native addon.
 class Tokenizer extends native.Tokenizer {
   constructor(options = {}) {
-    super(options.dictPath || (require("node:fs").existsSync(packagedDict) ? packagedDict : repoDict));
+    super(options.dictPath || (fs.existsSync(repoDict) ? repoDict : packagedDict));
   }
 
   lcut(text, options = {}) {

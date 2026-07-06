@@ -21,6 +21,7 @@ if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 
 from nexaloid import Tokenizer  # noqa: E402
+from nexaloid.tokenizer import _resolve_dict_path  # noqa: E402
 from nexaloid.tokenizer import NexaloidError  # noqa: E402
 from nxdict_builder import build as build_nxdict  # noqa: E402
 
@@ -67,13 +68,46 @@ def check_nxdict_userdict() -> None:
             tokenizer.close()
 
 
+def check_del_word_falls_back() -> None:
+    tokenizer = Tokenizer()
+    try:
+        tokenizer.add_word("火山知识库", freq=1000000)
+        tokenizer.del_word("火山知识库")
+        assert tokenizer.lcut("A火山知识库B") == ["A", "火山", "知识库", "B"]
+    finally:
+        tokenizer.close()
+
+
+def check_version_exported() -> None:
+    import nexaloid
+
+    assert isinstance(nexaloid.__version__, str)
+
+
+def check_repo_dict_preferred() -> None:
+    assert _resolve_dict_path(None) == ROOT / "data" / "dict" / "nexaloid.nxdict"
+
+
 def main() -> int:
     os.environ.setdefault("PYTHONUTF8", "1")
-    check_python_close_guard()
-    check_invalid_mode()
-    check_nxdict_userdict()
-    print("regression checks passed")
-    return 0
+    checks = [
+        check_python_close_guard,
+        check_invalid_mode,
+        check_nxdict_userdict,
+        check_del_word_falls_back,
+        check_version_exported,
+        check_repo_dict_preferred,
+    ]
+    failed = 0
+    for check in checks:
+        try:
+            check()
+            print(f"PASS {check.__name__}")
+        except Exception as exc:
+            failed += 1
+            print(f"FAIL {check.__name__}: {exc!r}")
+    print(f"{len(checks) - failed}/{len(checks)} regression checks passed")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

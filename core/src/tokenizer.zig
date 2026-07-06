@@ -96,11 +96,19 @@ fn searchTokens(allocator: std.mem.Allocator, lattice: *const lattice_mod.Lattic
     errdefer out.deinit(allocator);
     for (lattice.edges.items) |edge| {
         // Search mode exposes all explicit candidates plus small ngrams for recall.
-        if (edge.source != .unknown) try out.append(allocator, edge);
+        if (edge.source != .unknown) try appendSearchToken(allocator, &out, edge);
         try addSearchNgrams(allocator, &out, edge, chars);
     }
     std.mem.sort(types.NxEdge, out.items, {}, edgeLessThan);
     return out;
+}
+
+fn appendSearchToken(allocator: std.mem.Allocator, out: *std.ArrayListUnmanaged(types.NxEdge), edge: types.NxEdge) !void {
+    if (edge.end_char - edge.start_char < 2) return;
+    for (out.items) |existing| {
+        if (existing.start_char == edge.start_char and existing.end_char == edge.end_char) return;
+    }
+    try out.append(allocator, edge);
 }
 
 fn addSearchNgrams(allocator: std.mem.Allocator, out: *std.ArrayListUnmanaged(types.NxEdge), edge: types.NxEdge, chars: []const types.NxChar) !void {
@@ -116,7 +124,7 @@ fn addNgrams(allocator: std.mem.Allocator, out: *std.ArrayListUnmanaged(types.Nx
     if (len <= n) return;
     var start = edge.start_char;
     while (start + n <= edge.end_char) : (start += 1) {
-        try out.append(allocator, .{
+        try appendSearchToken(allocator, out, .{
             .start_char = start,
             .end_char = start + n,
             .start_byte = chars[start].start_byte,
@@ -212,4 +220,21 @@ test "search mode emits sub token ngrams" {
 
     try std.testing.expect(saw_science);
     try std.testing.expect(saw_calc_tech);
+}
+
+test "search mode filters single char and duplicate spans" {
+    var tokenizer = try Tokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+    try tokenizer.addWord("南京", 1, 8.0, 0);
+    try tokenizer.addWord("南京市", 2, 20.0, 0);
+
+    var tokens = try tokenizer.tokenizeMode("南京市", .search);
+    defer tokens.deinit(std.testing.allocator);
+
+    for (tokens.items, 0..) |token, i| {
+        try std.testing.expect(token.end_char - token.start_char >= 2);
+        for (tokens.items[0..i]) |prev| {
+            try std.testing.expect(prev.start_char != token.start_char or prev.end_char != token.end_char);
+        }
+    }
 }

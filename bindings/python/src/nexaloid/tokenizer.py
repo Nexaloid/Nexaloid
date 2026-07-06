@@ -73,19 +73,23 @@ _DICT_DIR = _PACKAGE_DIR / "data" / "dict"
 _REPO_DICT_DIR = Path(__file__).resolve().parents[4] / "data" / "dict"
 _BUILT_DICT = _DICT_DIR / "nexaloid.nxdict"
 _BUILT_TEXT_DICT = _DICT_DIR / "nexaloid.tsv"
+_DELETED_WORD_SCORE = -1_000_000.0
 
 
 def _resolve_dict_path(dict_path: str | os.PathLike[str] | None) -> Path:
     if dict_path is not None:
         return Path(dict_path)
+    repo_built = _REPO_DICT_DIR / "nexaloid.nxdict"
+    if repo_built.exists():
+        return repo_built
+    repo_text = _REPO_DICT_DIR / "nexaloid.tsv"
+    if repo_text.exists():
+        return repo_text
     if _BUILT_DICT.exists():
         return _BUILT_DICT
     if _BUILT_TEXT_DICT.exists():
         return _BUILT_TEXT_DICT
-    repo_built = _REPO_DICT_DIR / "nexaloid.nxdict"
-    if repo_built.exists():
-        return repo_built
-    return _REPO_DICT_DIR / "nexaloid.tsv"
+    return repo_text
 
 
 def _resolve_domain_dict_path(domain: str | None) -> Path | None:
@@ -235,6 +239,8 @@ class Tokenizer:
         self._deleted.discard(word)
 
     def del_word(self, word: str) -> None:
+        self._ensure_open()
+        self._add_word_score(word, _DELETED_WORD_SCORE)
         self._deleted.add(word)
 
     def load_userdict(self, path: str | os.PathLike[str]) -> None:

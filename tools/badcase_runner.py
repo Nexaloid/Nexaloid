@@ -13,11 +13,13 @@ if str(PY_SRC) not in sys.path:
     sys.path.insert(0, str(PY_SRC))
 
 import nexaloid.compat_jieba as jieba  # noqa: E402
+from nexaloid import Mode, Tokenizer  # noqa: E402
 
 
 def run(path: Path) -> int:
     cases = json.loads(path.read_text(encoding="utf-8"))
     failed = 0
+    tokenizer = Tokenizer()
 
     for case in cases:
         case_id = case["id"]
@@ -27,9 +29,17 @@ def run(path: Path) -> int:
             expected = case["expected"]
             ok = actual == expected
         else:
-            actual = list(jieba.cut_for_search(text))
+            if case.get("mode") == "raw_search":
+                actual = [token.text for token in tokenizer.tokenize(text, Mode.SEARCH)]
+            else:
+                actual = list(jieba.cut_for_search(text))
             expected = case["expected_search_contains"]
             ok = all(word in actual for word in expected)
+            if case.get("expected_search_unique"):
+                ok = ok and len(actual) == len(set(actual))
+            min_len = case.get("expected_search_min_len")
+            if min_len is not None:
+                ok = ok and all(len(word) >= min_len for word in actual)
 
         if ok:
             print(f"PASS {case_id}")
@@ -60,4 +70,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

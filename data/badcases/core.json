@@ -32,8 +32,14 @@
   {
     "id": "person_001",
     "text": "小明硕士毕业于中国科学院计算所",
-    "expected": ["小明", "硕士", "毕业", "于", "中国科学院", "计算所"],
+    "expected": ["小", "明", "硕士", "毕业", "于", "中国科学院", "计算所"],
     "tags": ["person", "academic"]
+  },
+  {
+    "id": "daily_002",
+    "text": "你还小明天再说",
+    "expected": ["你", "还", "小", "明天", "再说"],
+    "tags": ["daily", "ambiguity"]
   },
   {
     "id": "tech_001",
@@ -46,5 +52,32 @@
     "text": "苹果手机壳透明防摔MagSafe磁吸",
     "expected": ["苹果", "手机", "壳", "透明", "防", "摔", "MagSafe", "磁吸"],
     "tags": ["ecommerce", "mixed_text"]
+  },
+  {
+    "id": "daily_001",
+    "text": "我们在日本东京做RAG中文检索实验",
+    "expected": ["我们", "在", "日本", "东京", "做", "RAG", "中文", "检索", "实验"],
+    "tags": ["daily", "mixed_text", "rag"]
+  },
+  {
+    "id": "entity_001",
+    "text": "我爱北京天安门",
+    "expected": ["我", "爱", "北京", "天安门"],
+    "tags": ["entity", "place"]
+  },
+  {
+    "id": "ambiguity_003",
+    "text": "长春市长春节前发表讲话",
+    "expected": ["长春", "市长", "春节前", "发表", "讲话"],
+    "tags": ["ambiguity", "news"]
+  },
+  {
+    "id": "search_002",
+    "text": "南京市长江大桥",
+    "mode": "raw_search",
+    "expected_search_contains": ["南京", "南京市", "长江", "长江大桥", "大桥"],
+    "expected_search_unique": true,
+    "expected_search_min_len": 2,
+    "tags": ["search", "noise"]
   }
 ]

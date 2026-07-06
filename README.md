@@ -9,7 +9,7 @@ It is aimed at workloads where correctness, throughput, and cross-language consi
 - A dictionary-driven Chinese segmentation engine (double-array trie + Viterbi decoder)
 - A search tokenizer that emits dictionary candidates plus 2-gram / 3-gram expansions for recall
 - An **explainable** tokenizer: every token carries its origin (base dict, user dict, rule, or unknown fallback) and a score
-- A defined plugin ABI for future neural-model integration; the current core runs without loading plugins
+- A runtime plugin ABI for optional CandidateProvider integrations; the core still runs without plugins
 - Byte- and character-offset-preserving token output through the C ABI and language bindings
 
 ## What Nexaloid Is Not
@@ -111,12 +111,13 @@ UTF-8 text
   → Scanner (codepoints + byte/char offsets + class)
   → Dictionary Matcher (double-array trie walk + overlay trie)
   → Rule Matcher (mixed ASCII terms such as GPT-5.5 and onnxruntime-gpu)
-  → Lattice (all candidate edges from dict/rule/unknown sources)
+  → CandidateProvider Plugins (optional HMM/NER/domain candidates)
+  → Lattice (all candidate edges from dict/rule/plugin/unknown sources)
   → Viterbi Decoder (globally best path)
   → Token Stream (filtered, offset-preserving)
 ```
 
-The core is a single Zig library (`libnexaloid`). Language bindings call the C ABI and do not reimplement tokenizer logic. The plugin ABI header is present for v0.2 work, but current runtime plugin loading is not implemented.
+The core is a single Zig library (`libnexaloid`). Language bindings call the C ABI and do not reimplement tokenizer logic. Runtime loading is implemented for CandidateProvider plugins; other plugin hook kinds are reserved.
 
 ## Features
 
@@ -140,7 +141,7 @@ All bindings call the same core tokenizer. Token text and offsets should match a
 
 ### Plugin ABI
 
-`core/include/nexaloid_plugin.h` defines 8 planned hook kinds: candidate provider, boundary scorer, edge scorer, token filter, token expander, POS tagger, entity recognizer, and normalizer. Runtime loading is reserved for v0.2+ and is not active in the current core.
+`core/include/nexaloid_plugin.h` defines 8 hook kinds: candidate provider, boundary scorer, edge scorer, token filter, token expander, POS tagger, entity recognizer, and normalizer. The current runtime loads CandidateProvider plugins through `nx_load_plugin`; unsupported kinds are rejected. Plugins stream char-offset candidates into the lattice, and the core maps them back to byte offsets before Viterbi decoding.
 
 ## C ABI
 
@@ -156,6 +157,8 @@ NxStatus  nx_tokenize_batch(NxEngine *engine, const char *const *texts,
 NxStatus  nx_add_word(NxEngine *engine, const char *word, size_t word_len,
                       uint32_t word_id, float score, uint16_t pos_id);
 NxStatus  nx_reload_user_dict(NxEngine *engine, const char *user_dict_path);
+NxStatus  nx_load_plugin(NxEngine *engine, const char *plugin_path,
+                         const char *config_json);
 ```
 
 Headers: `core/include/nexaloid.h`, `core/include/nexaloid_plugin.h`
@@ -171,7 +174,7 @@ Every token includes:
 | `start_char` / `end_char` | Unicode codepoint offsets |
 | `word_id` | Dictionary word ID (0 for unknown / rule tokens) |
 | `pos_id` | POS tag ID (reserved, unresolved in v0.1) |
-| `source` | Origin: `base_dict`, `user_dict`, `rule`, or `unknown`; `domain_dict` and `plugin` are reserved source values |
+| `source` | Origin: `base_dict`, `user_dict`, `rule`, `unknown`, or `plugin`; `domain_dict` is reserved |
 | `score` | Decoder score (higher is better; log-probability for dict tokens) |
 
 ## Dictionary Management
@@ -230,3 +233,5 @@ python tools\benchmark.py -n 1000
 | C++ | `bindings/cpp/` | RAII wrapper, header-only |
 | Go | `bindings/go/` | cgo binding |
 | Rust | `bindings/rust/` | safe wrapper + `-sys` crate |
+
+C, C++, Go, and Zig users can consume the native SDK zip files attached to GitHub Releases. Each SDK contains headers, the platform native library, and `data/dict/nexaloid.nxdict`.
