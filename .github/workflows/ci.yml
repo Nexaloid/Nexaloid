@@ -41,8 +41,16 @@ jobs:
         run: python tools/plugin_integration_checks.py
 
   python-package-regression:
-    name: Python package regression
-    runs-on: ubuntu-latest
+    name: Python package regression (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -156,8 +164,16 @@ jobs:
         working-directory: bindings/go
 
   node-package-regression:
-    name: Node.js package regression
-    runs-on: ubuntu-latest
+    name: Node.js package regression (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -213,7 +229,7 @@ jobs:
           - platform: linux-musl
             zig_target: x86_64-linux-musl
           - platform: linux-armv7
-            zig_target: arm-linux-musleabihf
+            zig_target: arm-linux-gnueabihf
           - platform: riscv64
             zig_target: riscv64-linux-gnu
     steps:
@@ -241,14 +257,20 @@ jobs:
       matrix:
         target:
           - platform: linux-arm64
-            zig_target: aarch64-linux-musl
-            docker_platform: linux/arm64
+            zig_target: aarch64-linux-gnu
+            qemu: qemu-aarch64-static
+            qemu_prefix: /usr/aarch64-linux-gnu
+            packages: qemu-user-static gcc-aarch64-linux-gnu
           - platform: linux-armv7
-            zig_target: arm-linux-musleabihf
-            docker_platform: linux/arm/v7
+            zig_target: arm-linux-gnueabihf
+            qemu: qemu-arm-static
+            qemu_prefix: /usr/arm-linux-gnueabihf
+            packages: qemu-user-static gcc-arm-linux-gnueabihf
           - platform: riscv64
-            zig_target: riscv64-linux-musl
-            docker_platform: linux/riscv64
+            zig_target: riscv64-linux-gnu
+            qemu: qemu-riscv64-static
+            qemu_prefix: /usr/riscv64-linux-gnu
+            packages: qemu-user-static gcc-riscv64-linux-gnu
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -256,8 +278,10 @@ jobs:
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
-      - name: Set up QEMU binfmt
-        run: docker run --privileged --rm tonistiigi/binfmt --install arm64,arm,riscv64
+      - name: Install QEMU runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.target.packages }}
       - name: Cross-build native library
         run: zig build -Dtarget=${{ matrix.target.zig_target }}
         working-directory: core
@@ -267,13 +291,8 @@ jobs:
           zig cc -target ${{ matrix.target.zig_target }} -std=c11 -Icore/include bindings/c/tests/regression.c -Lcore/zig-out/lib -lnexaloid -o .zig-cache/qemu/c-regression
       - name: Run C regression under QEMU
         run: |
-          docker run --rm \
-            --platform ${{ matrix.target.docker_platform }} \
-            -v "$PWD:/work" \
-            -w /work \
-            -e LD_LIBRARY_PATH=/work/core/zig-out/lib \
-            alpine:3.20 \
-            /work/.zig-cache/qemu/c-regression
+          LD_LIBRARY_PATH="$PWD/core/zig-out/lib" \
+            ${{ matrix.target.qemu }} -L ${{ matrix.target.qemu_prefix }} .zig-cache/qemu/c-regression
 
   python-versions:
     name: Python ${{ matrix.python }} compatibility

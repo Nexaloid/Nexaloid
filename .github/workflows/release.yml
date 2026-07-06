@@ -68,6 +68,9 @@ jobs:
           - os: ubuntu-latest
             platform: linux-x64
             pyplat: ""
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+            pyplat: ""
           - os: windows-latest
             platform: windows-x64
             pyplat: win_amd64
@@ -154,7 +157,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
+        target: &native-sdk-targets
           - os: ubuntu-latest
             platform: linux-x64
             zig_target: x86_64-linux-gnu
@@ -178,7 +181,7 @@ jobs:
             zig_target: x86_64-linux-musl
           - os: ubuntu-latest
             platform: linux-armv7
-            zig_target: arm-linux-musleabihf
+            zig_target: arm-linux-gnueabihf
           - os: ubuntu-latest
             platform: riscv64
             zig_target: riscv64-linux-gnu
@@ -308,7 +311,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: *release-targets
+        target: *native-sdk-targets
     runs-on: ${{ matrix.target.os }}
     steps:
       - name: Check out repository
@@ -324,10 +327,10 @@ jobs:
         with:
           version: 0.16.0
       - name: Build native library
-        run: zig build
+        run: zig build -Dtarget=${{ matrix.target.zig_target }}
         working-directory: ${{ github.workspace }}/core
       - name: Stage Cargo native assets
-        run: python tools/stage_assets.py
+        run: python tools/stage_assets.py --rust-only --platform ${{ matrix.target.platform }}
       - name: Upload Cargo native assets
         uses: actions/upload-artifact@v6
         with:
