@@ -19,6 +19,10 @@ on:
         description: "Publish npm"
         type: boolean
         default: true
+      publish_native_sdk:
+        description: "Publish GitHub native SDK assets"
+        type: boolean
+        default: true
   push:
     tags:
       - "v*"
@@ -142,6 +146,65 @@ jobs:
         with:
           packages-dir: dist
           skip-existing: true
+
+  native-sdk-build:
+    name: Build native SDK (${{ matrix.target.platform }})
+    if: github.event_name != 'workflow_dispatch' || inputs.publish_native_sdk
+    needs: ci_gate
+    strategy:
+      fail-fast: false
+      matrix:
+        target: *release-targets
+    runs-on: ${{ matrix.target.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - name: Build native library
+        run: zig build
+        working-directory: ${{ github.workspace }}/core
+      - name: Package native SDK
+        run: python tools/package_native_sdk.py --version "${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}" --platform "${{ matrix.target.platform }}"
+      - name: Upload native SDK artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-sdk-${{ matrix.target.platform }}
+          path: dist/native/*.zip
+
+  github-release:
+    name: Publish GitHub release assets
+    if: github.event_name != 'workflow_dispatch' || inputs.publish_native_sdk
+    runs-on: ubuntu-latest
+    needs: native-sdk-build
+    permissions:
+      contents: write
+    steps:
+      - name: Download native SDK artifacts
+        uses: actions/download-artifact@v6
+        with:
+          pattern: native-sdk-*
+          path: dist/native
+          merge-multiple: true
+      - name: Upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+        run: |
+          case "$RELEASE_VERSION" in
+            v*) RELEASE_TAG="$RELEASE_VERSION" ;;
+            *) RELEASE_TAG="v$RELEASE_VERSION" ;;
+          esac
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes
+          fi
+          gh release upload "$RELEASE_TAG" dist/native/*.zip --clobber
 
   cargo-native-build:
     name: Build Cargo native assets (${{ matrix.target.platform }})
@@ -310,7 +373,7 @@ jobs:
     name: Write release summary
     runs-on: ubuntu-latest
     if: always()
-    needs: [ci_gate, pypi, cargo, npm]
+    needs: [ci_gate, pypi, cargo, npm, github-release]
     steps:
       - name: Write package results
         run: |
@@ -322,5 +385,6 @@ jobs:
             echo "| PyPI | ${{ needs.pypi.result }} |"
             echo "| Cargo | ${{ needs.cargo.result }} |"
             echo "| npm | ${{ needs.npm.result }} |"
+            echo "| GitHub native SDK | ${{ needs.github-release.result }} |"
             echo "| CI gate | ${{ needs.ci_gate.result }} |"
           } >> "$GITHUB_STEP_SUMMARY"
