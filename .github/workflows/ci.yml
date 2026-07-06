@@ -95,23 +95,24 @@ jobs:
       - name: Build native library
         run: zig build
         working-directory: core
-      - name: Regression test C binding
-        if: matrix.language == 'c'
+      - name: Regression test native binding
+        shell: bash
         run: |
           mkdir -p .zig-cache
-          cc -std=c11 -Icore/include bindings/c/tests/regression.c -Lcore/zig-out/lib -lnexaloid -o .zig-cache/c-regression
-          .zig-cache/c-regression
-      - name: Regression test C++ binding
-        if: matrix.language == 'cpp'
-        run: |
-          mkdir -p .zig-cache
-          c++ -std=c++17 -Ibindings/cpp/include -Icore/include bindings/cpp/tests/regression.cpp -Lcore/zig-out/lib -lnexaloid -o .zig-cache/cpp-regression
-          .zig-cache/cpp-regression
-      - name: Regression test Zig binding
-        if: matrix.language == 'zig'
-        run: |
-          zig build-exe bindings/zig/tests/regression.zig -Icore/include -Lcore/zig-out/lib -lnexaloid -lc
-          ./regression
+          case "${{ matrix.language }}" in
+            c)
+              cc -std=c11 -Icore/include bindings/c/tests/regression.c -Lcore/zig-out/lib -lnexaloid -o .zig-cache/c-regression
+              .zig-cache/c-regression
+              ;;
+            cpp)
+              c++ -std=c++17 -Ibindings/cpp/include -Icore/include bindings/cpp/tests/regression.cpp -Lcore/zig-out/lib -lnexaloid -o .zig-cache/cpp-regression
+              .zig-cache/cpp-regression
+              ;;
+            zig)
+              zig build-exe bindings/zig/tests/regression.zig -Icore/include -Lcore/zig-out/lib -lnexaloid -lc
+              ./regression
+              ;;
+          esac
 
   rust-regression:
     name: Rust binding regression
