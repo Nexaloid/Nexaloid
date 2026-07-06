@@ -6,7 +6,34 @@ description = "C ABI bindings for the Nexaloid Chinese tokenizer runtime"
 license = "Apache-2.0"
 repository = "https://github.com/Nexaloid/Nexaloid"
 build = "build.rs"
-include = ["build.rs", "src/**", "native/**", "data/dict/**", "Cargo.toml"]
+include = ["build.rs", "src/**", "data/dict/**", "Cargo.toml"]
 
 [lib]
 path = "src/lib.rs"
+
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))'.dependencies]
+nexaloid-sys-linux-x64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-linux-x64" }
+
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "musl"))'.dependencies]
+nexaloid-sys-linux-musl = { version = "0.0.0-dev.0", path = "../nexaloid-sys-linux-musl" }
+
+[target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
+nexaloid-sys-linux-arm64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-linux-arm64" }
+
+[target.'cfg(all(target_os = "linux", target_arch = "arm"))'.dependencies]
+nexaloid-sys-linux-armv7 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-linux-armv7" }
+
+[target.'cfg(all(target_os = "linux", target_arch = "riscv64"))'.dependencies]
+nexaloid-sys-riscv64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-riscv64" }
+
+[target.'cfg(all(target_os = "windows", target_arch = "x86_64"))'.dependencies]
+nexaloid-sys-windows-x64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-windows-x64" }
+
+[target.'cfg(all(target_os = "windows", target_arch = "aarch64"))'.dependencies]
+nexaloid-sys-windows-arm64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-windows-arm64" }
+
+[target.'cfg(all(target_os = "macos", target_arch = "x86_64"))'.dependencies]
+nexaloid-sys-darwin-x64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-darwin-x64" }
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+nexaloid-sys-darwin-arm64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-darwin-arm64" }

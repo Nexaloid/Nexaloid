@@ -43,7 +43,15 @@ def main() -> None:
     py_version = python_version(version)
 
     replace("bindings/python/pyproject.toml", r'version = "[^"]+"', f'version = "{py_version}"')
+    for manifest in (ROOT / "bindings/rust").glob("nexaloid-sys-*/*.toml"):
+        rel = manifest.relative_to(ROOT).as_posix()
+        replace(rel, r'version = "[^"]+"', f'version = "{version}"')
     replace("bindings/rust/nexaloid-sys/Cargo.toml", r'version = "[^"]+"', f'version = "{version}"')
+    replace(
+        "bindings/rust/nexaloid-sys/Cargo.toml",
+        r'nexaloid-sys-([a-z0-9-]+) = \{ version = "[^"]+", path = "../nexaloid-sys-\1" \}',
+        rf'nexaloid-sys-\1 = {{ version = "{version}", path = "../nexaloid-sys-\1" }}',
+    )
     replace("bindings/rust/nexaloid/Cargo.toml", r'version = "[^"]+"', f'version = "{version}"')
     replace(
         "bindings/rust/nexaloid/Cargo.toml",

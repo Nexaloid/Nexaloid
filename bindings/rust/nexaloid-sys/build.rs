@@ -24,7 +24,12 @@ fn main() {
     } else {
         "linux-x64"
     };
-    let dir = manifest_dir.join("native").join(platform);
+    let dir = env::var(format!(
+        "DEP_NEXALOID_PREBUILT_{}_NATIVE_DIR",
+        platform.replace('-', "_").to_uppercase()
+    ))
+    .map(PathBuf::from)
+    .unwrap_or_else(|_| manifest_dir.join("native").join(platform));
 
     if dir.exists() {
         println!("cargo:rustc-link-search=native={}", dir.display());

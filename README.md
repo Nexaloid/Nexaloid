@@ -244,4 +244,4 @@ C, C++, and Zig users can consume language-specific native SDK zip files attache
 
 Native SDK assets are built for `linux-x64`, `windows-x64`, `darwin-x64`, `darwin-arm64`, `linux-arm64`, `windows-arm64`, `linux-musl`, `linux-armv7`, and `riscv64`. Each SDK contains headers, the platform native library, examples, and `data/dict/nexaloid.nxdict`.
 
-Release branches `release/c`, `release/cpp`, and `release/zig` track the latest released language entry files; copy the matching release asset's `lib/` directory into the checkout to run examples. Python, npm, and Cargo packages stay limited to the targets that are built and executed in their package pipelines.
+Release branches `release/c`, `release/cpp`, and `release/zig` track the latest released language entry files; copy the matching release asset's `lib/` directory into the checkout to run examples. Python and npm packages stay limited to the targets that are built and executed in their package pipelines. Rust uses small target-specific native crates such as `nexaloid-sys-linux-x64` and `nexaloid-sys-darwin-arm64` so Cargo installs can stay below crates.io package size limits.

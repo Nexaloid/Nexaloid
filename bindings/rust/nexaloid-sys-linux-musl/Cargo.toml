@@ -1,0 +1,13 @@
+[package]
+name = "nexaloid-sys-linux-musl"
+version = "0.0.0-dev.0"
+edition = "2021"
+description = "Linux musl native library for nexaloid-sys"
+license = "Apache-2.0"
+repository = "https://github.com/Nexaloid/Nexaloid"
+links = "nexaloid_prebuilt_linux_musl"
+build = "build.rs"
+include = ["build.rs", "src/**", "native/**", "Cargo.toml"]
+
+[lib]
+path = "src/lib.rs"

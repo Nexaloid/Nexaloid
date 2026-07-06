@@ -12,3 +12,50 @@ dependencies = [
 [[package]]
 name = "nexaloid-sys"
 version = "0.0.0-dev.0"
+dependencies = [
+ "nexaloid-sys-darwin-arm64",
+ "nexaloid-sys-darwin-x64",
+ "nexaloid-sys-linux-arm64",
+ "nexaloid-sys-linux-armv7",
+ "nexaloid-sys-linux-musl",
+ "nexaloid-sys-linux-x64",
+ "nexaloid-sys-riscv64",
+ "nexaloid-sys-windows-arm64",
+ "nexaloid-sys-windows-x64",
+]
+
+[[package]]
+name = "nexaloid-sys-darwin-arm64"
+version = "0.0.0-dev.0"
+
+[[package]]
+name = "nexaloid-sys-darwin-x64"
+version = "0.0.0-dev.0"
+
+[[package]]
+name = "nexaloid-sys-linux-arm64"
+version = "0.0.0-dev.0"
+
+[[package]]
+name = "nexaloid-sys-linux-armv7"
+version = "0.0.0-dev.0"
+
+[[package]]
+name = "nexaloid-sys-linux-musl"
+version = "0.0.0-dev.0"
+
+[[package]]
+name = "nexaloid-sys-linux-x64"
+version = "0.0.0-dev.0"
+
+[[package]]
+name = "nexaloid-sys-riscv64"
+version = "0.0.0-dev.0"
+
+[[package]]
+name = "nexaloid-sys-windows-arm64"
+version = "0.0.0-dev.0"
+
+[[package]]
+name = "nexaloid-sys-windows-x64"
+version = "0.0.0-dev.0"

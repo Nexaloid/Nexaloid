@@ -56,6 +56,12 @@ def stage_rust(target_platform: str | None = None) -> None:
         copy_file(src, native / src.name)
 
 
+def stage_rust_platform_crate(target_platform: str) -> None:
+    native = ROOT / "bindings" / "rust" / f"nexaloid-sys-{target_platform}" / "native"
+    for src in core_libs(target_platform):
+        copy_file(src, native / src.name)
+
+
 def stage_node(include_addon: bool) -> None:
     pkg = ROOT / "bindings/node"
     copy_dict(pkg / "data/dict")
@@ -75,7 +81,13 @@ def main() -> None:
     parser.add_argument("--node-addon", action="store_true")
     parser.add_argument("--platform")
     parser.add_argument("--rust-only", action="store_true")
+    parser.add_argument("--rust-platform-crate", action="store_true")
     args = parser.parse_args()
+    if args.rust_platform_crate:
+        if args.platform is None:
+            raise SystemExit("--rust-platform-crate requires --platform")
+        stage_rust_platform_crate(args.platform)
+        return
     if args.rust_only:
         stage_rust(args.platform)
         return
