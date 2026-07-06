@@ -14,6 +14,7 @@ runs:
         set -euo pipefail
         case "${RUNNER_OS}-${RUNNER_ARCH}" in
           Linux-X64) target="x86_64-linux" ;;
+          Linux-ARM64) target="aarch64-linux" ;;
           macOS-X64) target="x86_64-macos" ;;
           macOS-ARM64) target="aarch64-macos" ;;
           *) echo "unsupported runner: ${RUNNER_OS}-${RUNNER_ARCH}" >&2; exit 1 ;;
