@@ -362,24 +362,42 @@ class Tokenizer:
         )
         return out
 
+    def _token_texts(self, text: str, mode: Mode) -> list[str]:
+        self._ensure_open()
+        data = text.encode("utf-8")
+        out: list[str] = []
+
+        @_CALLBACK
+        def on_token(token_ptr, text_ptr, text_len, user_data):
+            del text_ptr, text_len, user_data
+            token = token_ptr.contents
+            part = data[token.start_byte : token.end_byte].decode("utf-8")
+            if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
+                out.extend(part)
+                return
+            out.append(part)
+
+        self._check(_LIB.nx_tokenize(self._engine, data, len(data), int(mode), on_token, None))
+        return out
+
     def cut(self, text: str, cut_all: bool = False, HMM: bool = True):
         del HMM
         mode = Mode.FULL if cut_all else Mode.ACCURATE
-        for token in self.tokenize(text, mode):
-            yield token.text
+        yield from self._token_texts(text, mode)
 
     def lcut(self, text: str, cut_all: bool = False, HMM: bool = True) -> list[str]:
-        return list(self.cut(text, cut_all=cut_all, HMM=HMM))
+        del HMM
+        return self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE)
 
     def cut_for_search(self, text: str, HMM: bool = True):
         del HMM
         seen: set[str] = set()
-        for token in self.tokenize(text, Mode.SEARCH):
-            if len(token.text) <= 1:
+        for word in self._token_texts(text, Mode.SEARCH):
+            if len(word) <= 1:
                 continue
-            if token.text not in seen:
-                seen.add(token.text)
-                yield token.text
+            if word not in seen:
+                seen.add(word)
+                yield word
 
     def _check(self, status: int) -> None:
         if status != 0:

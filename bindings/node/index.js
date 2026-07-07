@@ -4,14 +4,17 @@ const fs = require("node:fs");
 const root = path.resolve(__dirname, "../..");
 const platformArch = require("./platform");
 const prebuildDir = path.join(__dirname, "prebuilds", platformArch);
-if (process.platform === "win32" && fs.existsSync(prebuildDir)) {
+const localBuild = path.join(__dirname, "build/Release/nexaloid_node.node");
+if (process.platform === "win32" && fs.existsSync(localBuild)) {
+  process.env.PATH = path.join(root, "core", "zig-out", "bin") + path.delimiter + process.env.PATH;
+} else if (process.platform === "win32" && fs.existsSync(prebuildDir)) {
   process.env.PATH = prebuildDir + path.delimiter + process.env.PATH;
 } else if (process.platform === "win32") {
   process.env.PATH = path.join(root, "core", "zig-out", "bin") + path.delimiter + process.env.PATH;
 }
 
 const prebuild = path.join(prebuildDir, "nexaloid_node.node");
-const native = require(fs.existsSync(prebuild) ? prebuild : "./build/Release/nexaloid_node.node");
+const native = require(fs.existsSync(localBuild) ? localBuild : fs.existsSync(prebuild) ? prebuild : localBuild);
 const packagedDict = path.join(__dirname, "data", "dict", "nexaloid.tsv");
 const repoDict = path.join(root, "data", "dict", "nexaloid.tsv");
 
@@ -22,13 +25,12 @@ class Tokenizer extends native.Tokenizer {
   }
 
   lcut(text, options = {}) {
-    return this.tokenize(text, options.mode || 0).map((token) => token.text);
+    return super.lcut(text, options.mode || 0);
   }
 
   cutForSearch(text) {
     const seen = new Set();
-    return this.tokenize(text, 2)
-      .map((token) => token.text)
+    return super.lcut(text, 2)
       .filter((word) => word.length > 1 && !seen.has(word) && seen.add(word));
   }
 

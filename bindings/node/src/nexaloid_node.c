@@ -86,6 +86,14 @@ static void on_token(const NxToken *token, const char *text, size_t text_len, vo
   napi_set_element(env, ctx->array, ctx->count++, item);
 }
 
+static void on_text(const NxToken *token, const char *text, size_t text_len, void *user_data) {
+  (void)text_len;
+  TokenizeContext *ctx = (TokenizeContext *)user_data;
+  napi_value value;
+  napi_create_string_utf8(ctx->env, text + token->start_byte, token->end_byte - token->start_byte, &value);
+  napi_set_element(ctx->env, ctx->array, ctx->count++, value);
+}
+
 static napi_value tokenizer_new(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value args[1];
@@ -158,6 +166,40 @@ static napi_value tokenizer_tokenize(napi_env env, napi_callback_info info) {
 
   /* Tokenization stays in native core; JS only receives copied token objects. */
   NxStatus status = nx_tokenize(tokenizer->engine, text, text_len, (NxMode)mode, on_token, &ctx);
+  free(text);
+  if (status != NX_OK) return throw_status(env, status);
+  return ctx.array;
+}
+
+static napi_value tokenizer_lcut(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value args[2];
+  napi_value self;
+  napi_get_cb_info(env, info, &argc, args, &self, NULL);
+
+  NodeTokenizer *tokenizer = NULL;
+  napi_unwrap(env, self, (void **)&tokenizer);
+  if (tokenizer == NULL || tokenizer->engine == NULL) {
+    napi_throw_error(env, NULL, "tokenizer is closed");
+    return NULL;
+  }
+
+  char *text = NULL;
+  size_t text_len = 0;
+  if (argc == 0 || !get_string_arg(env, args[0], &text, &text_len)) {
+    napi_throw_type_error(env, NULL, "text must be a string");
+    return NULL;
+  }
+
+  uint32_t mode = NX_MODE_ACCURATE;
+  if (argc > 1) napi_get_value_uint32(env, args[1], &mode);
+
+  TokenizeContext ctx;
+  ctx.env = env;
+  ctx.count = 0;
+  napi_create_array(env, &ctx.array);
+
+  NxStatus status = nx_tokenize(tokenizer->engine, text, text_len, (NxMode)mode, on_text, &ctx);
   free(text);
   if (status != NX_OK) return throw_status(env, status);
   return ctx.array;
@@ -260,6 +302,7 @@ static napi_value tokenizer_load_plugin(napi_env env, napi_callback_info info) {
 static napi_value init(napi_env env, napi_value exports) {
   napi_property_descriptor methods[] = {
     {"tokenize", NULL, tokenizer_tokenize, NULL, NULL, NULL, napi_default, NULL},
+    {"lcut", NULL, tokenizer_lcut, NULL, NULL, NULL, napi_default, NULL},
     {"close", NULL, tokenizer_close, NULL, NULL, NULL, napi_default, NULL},
     {"addWord", NULL, tokenizer_add_word, NULL, NULL, NULL, napi_default, NULL},
     {"loadUserdict", NULL, tokenizer_load_userdict, NULL, NULL, NULL, napi_default, NULL},
@@ -267,7 +310,7 @@ static napi_value init(napi_env env, napi_value exports) {
   };
 
   napi_value ctor;
-  napi_define_class(env, "Tokenizer", NAPI_AUTO_LENGTH, tokenizer_new, NULL, 5, methods, &ctor);
+  napi_define_class(env, "Tokenizer", NAPI_AUTO_LENGTH, tokenizer_new, NULL, 6, methods, &ctor);
   napi_create_reference(env, ctor, 1, &tokenizer_ctor);
   napi_set_named_property(env, exports, "Tokenizer", ctor);
   return exports;
