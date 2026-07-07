@@ -3,8 +3,10 @@ name = "nexaloid"
 version = "0.0.0-dev.0"
 edition = "2021"
 description = "Chinese tokenizer runtime"
+readme = "README.md"
 license = "Apache-2.0"
 repository = "https://github.com/Nexaloid/Nexaloid"
+include = ["src/**", "Cargo.toml", "README.md"]
 
 [dependencies]
 nexaloid-sys = { version = "0.0.0-dev.0", path = "../nexaloid-sys" }

@@ -3,10 +3,11 @@ name = "nexaloid-sys"
 version = "0.0.0-dev.0"
 edition = "2021"
 description = "C ABI bindings for the Nexaloid Chinese tokenizer runtime"
+readme = "README.md"
 license = "Apache-2.0"
 repository = "https://github.com/Nexaloid/Nexaloid"
 build = "build.rs"
-include = ["build.rs", "src/**", "data/dict/**", "Cargo.toml"]
+include = ["build.rs", "src/**", "data/dict/**", "Cargo.toml", "README.md"]
 
 [lib]
 path = "src/lib.rs"

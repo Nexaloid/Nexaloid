@@ -1,15 +1,29 @@
-# nexaloid Node.js Binding
+# @nexaloid/nexaloid
 
-Node.js wraps the nexaloid C ABI through N-API. Segmentation stays in native core.
+Node.js bindings for the Nexaloid Chinese tokenizer.
+
+The npm package bundles the default dictionary and a prebuilt N-API addon for supported platforms.
+
+## Install
+
+```bash
+npm install @nexaloid/nexaloid
+```
 
 ## Usage
 
 ```js
 const nexaloid = require("@nexaloid/nexaloid");
-const tokenizer = new nexaloid.Tokenizer({ dictPath: "data/dict/nexaloid.tsv" });
+const tokenizer = new nexaloid.Tokenizer();
 
-tokenizer.lcut("南京市长江大桥");
-tokenizer.cutForSearch("中国科学院计算技术研究所");
+console.log(tokenizer.lcut("南京市长江大桥"));
+console.log(tokenizer.cutForSearch("中国科学院计算技术研究所"));
+```
+
+The default tokenizer uses the packaged `data/dict/nexaloid.tsv`. Pass `dictPath` when you need a custom dictionary:
+
+```js
+const tokenizer = new nexaloid.Tokenizer({ dictPath: "data/dict/nexaloid.tsv" });
 ```
 
 ## Build
@@ -19,11 +33,3 @@ cd bindings/node
 npm run build
 npm run test:binding
 ```
-
-The binding calls:
-
-- `nx_engine_new`
-- `nx_engine_free`
-- `nx_tokenize`
-- `nx_add_word`
-- `nx_reload_user_dict`
