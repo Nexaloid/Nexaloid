@@ -49,7 +49,7 @@ jobs:
         run: zig build test
         working-directory: core
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Run regression checks
         run: python tools/regression_checks.py
@@ -95,7 +95,7 @@ jobs:
         with:
           version: 0.16.0
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: ${{ github.workspace }}/core
       - name: Install Python build tools
         run: python -m pip install -U build
@@ -198,7 +198,7 @@ jobs:
         with:
           version: 0.16.0
       - name: Build native library
-        run: zig build -Dtarget=${{ matrix.target.zig_target }}
+        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target.zig_target }}
         working-directory: ${{ github.workspace }}/core
       - name: Package native SDK
         shell: bash
@@ -388,7 +388,7 @@ jobs:
             platform="${target%%:*}"
             zig_target="${target##*:}"
             rm -rf core/zig-out
-            (cd core && zig build -Dtarget="$zig_target" --summary none)
+            (cd core && zig build -Doptimize=ReleaseFast -Dtarget="$zig_target" --summary none)
             python tools/stage_assets.py --rust-platform-crate --platform "$platform"
             publish_crate "bindings/rust/nexaloid-sys-$platform/Cargo.toml"
           done
@@ -470,7 +470,7 @@ jobs:
         with:
           version: 0.16.0
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: ${{ github.workspace }}/core
       - name: Build Node.js addon
         run: npm run build

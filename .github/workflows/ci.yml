@@ -33,7 +33,7 @@ jobs:
         run: zig build test
         working-directory: core
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Run regression checks
         run: python tools/regression_checks.py
@@ -63,7 +63,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Install Python build tools
         run: python -m pip install -U build
@@ -101,7 +101,7 @@ jobs:
         with:
           version: 0.16.0
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Regression test native binding
         shell: bash
@@ -135,7 +135,7 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Test Rust binding
         run: cargo test --manifest-path bindings/rust/nexaloid/Cargo.toml
@@ -157,7 +157,7 @@ jobs:
         with:
           go-version: "1.22"
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Test Go binding
         run: go test ./nexaloid
@@ -191,7 +191,7 @@ jobs:
           node-version: "22"
           package-manager-cache: false
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Build Node.js addon
         run: npm run build
@@ -244,7 +244,7 @@ jobs:
         with:
           python-version: "3.x"
       - name: Cross-build native library
-        run: zig build -Dtarget=${{ matrix.target.zig_target }}
+        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target.zig_target }}
         working-directory: core
       - name: Package native SDK
         run: python tools/package_native_sdk.py --version 0.0.0-ci --platform ${{ matrix.target.platform }} --language all --out-dir dist/native-ci
@@ -283,7 +283,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.target.packages }}
       - name: Cross-build native library
-        run: zig build -Dtarget=${{ matrix.target.zig_target }}
+        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target.zig_target }}
         working-directory: core
       - name: Cross-build C regression
         run: |
@@ -314,7 +314,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Install Python build tools
         run: python -m pip install -U build
@@ -362,7 +362,7 @@ jobs:
           node-version: ${{ matrix.node }}
           package-manager-cache: false
       - name: Build native library
-        run: zig build
+        run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Build Node.js addon
         run: npm run build

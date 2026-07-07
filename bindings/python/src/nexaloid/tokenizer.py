@@ -150,12 +150,12 @@ def _load_lib() -> ctypes.CDLL:
         candidates.append(Path(explicit))
     root = Path(__file__).resolve().parents[4]
     candidates += [
-        _PACKAGE_DIR / "native" / "nexaloid.dll",
-        _PACKAGE_DIR / "native" / "libnexaloid.so",
-        _PACKAGE_DIR / "native" / "libnexaloid.dylib",
         root / "core" / "zig-out" / "bin" / "nexaloid.dll",
         root / "core" / "zig-out" / "lib" / "libnexaloid.so",
         root / "core" / "zig-out" / "lib" / "libnexaloid.dylib",
+        _PACKAGE_DIR / "native" / "nexaloid.dll",
+        _PACKAGE_DIR / "native" / "libnexaloid.so",
+        _PACKAGE_DIR / "native" / "libnexaloid.dylib",
     ]
     for path in candidates:
         if path.exists():
@@ -291,11 +291,9 @@ class Tokenizer:
 
         @_CALLBACK
         def on_token(token_ptr, text_ptr, text_len, user_data):
-            del user_data
-            # Copy text from the callback frame immediately; native memory is not retained.
-            raw = ctypes.string_at(text_ptr, text_len)
+            del text_ptr, text_len, user_data
             token = token_ptr.contents
-            part = raw[token.start_byte : token.end_byte].decode("utf-8")
+            part = data[token.start_byte : token.end_byte].decode("utf-8")
             if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
                 _append_deleted_fallback(out, part, token)
                 return
@@ -329,9 +327,9 @@ class Tokenizer:
 
         @_BATCH_CALLBACK
         def on_token(index, token_ptr, text_ptr, text_len, user_data):
-            del user_data
+            del text_ptr, text_len, user_data
             # Core emits batch callbacks in input order after worker threads finish.
-            raw = ctypes.string_at(text_ptr, text_len)
+            raw = encoded[index]
             token = token_ptr.contents
             part = raw[token.start_byte : token.end_byte].decode("utf-8")
             if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
