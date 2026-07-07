@@ -77,7 +77,7 @@ jobs:
           - os: macos-15-intel
             platform: darwin-x64
             pyplat: macosx_15_0_x86_64
-          - os: macos-latest
+          - os: macos-15
             platform: darwin-arm64
             pyplat: macosx_15_0_arm64
     runs-on: ${{ matrix.target.os }}
@@ -139,7 +139,7 @@ jobs:
       id-token: write
     steps:
       - name: Download PyPI wheels
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: pypi-*
           path: dist
@@ -237,7 +237,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
       - name: Download native SDK artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: native-sdk-*
           path: dist/native
@@ -516,7 +516,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
       - name: Download npm prebuilds
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: npm-*
           path: bindings/node/prebuilds
