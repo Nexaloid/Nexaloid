@@ -329,10 +329,30 @@ jobs:
       - name: Publish platform native crates
         shell: bash
         run: |
+          sleep_for_rate_limit() {
+            local log="$1"
+            local retry_after
+            local retry_epoch
+            local now_epoch
+            if ! grep -qi "Too Many Requests" "$log"; then
+              return 1
+            fi
+            retry_after="$(sed -nE 's/.*try again after (.*) and see.*/\1/p' "$log" | tail -n1)"
+            if [ -z "$retry_after" ]; then
+              return 1
+            fi
+            retry_epoch="$(date -u -d "$retry_after" +%s 2>/dev/null || true)"
+            now_epoch="$(date -u +%s)"
+            if [ -z "$retry_epoch" ] || [ "$retry_epoch" -le "$now_epoch" ]; then
+              return 1
+            fi
+            sleep $((retry_epoch - now_epoch + 15))
+          }
+
           publish_crate() {
             local manifest="$1"
             local log
-            for attempt in 1 2 3; do
+            for attempt in 1 2 3 4; do
               log="$(mktemp)"
               if cargo publish --allow-dirty --manifest-path "$manifest" >"$log" 2>&1; then
                 cat "$log"
@@ -343,6 +363,10 @@ jobs:
               if grep -Eiq "already uploaded|already exists" "$log"; then
                 rm -f "$log"
                 return 0
+              fi
+              if sleep_for_rate_limit "$log"; then
+                rm -f "$log"
+                continue
               fi
               rm -f "$log"
               sleep $((attempt * 30))
