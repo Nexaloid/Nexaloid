@@ -162,6 +162,7 @@ def check_python_hmm_true_enabled() -> None:
             assert tokenizer.lcut("南京市长江大桥") == ["南京市", "长江大桥"]
             assert tokenizer.lcut("小明硕士毕业", HMM=False) == ["小", "明", "硕士", "毕业"]
             assert tokenizer.lcut("小明硕士毕业", HMM=True) == ["小明", "硕士", "毕业"]
+            assert list(tokenizer.cut_for_search("南京市长江大桥", HMM=True)) == list(tokenizer.cut_for_search("南京市长江大桥", HMM=False))
         finally:
             tokenizer.close()
             if old_plugin is None:

@@ -489,8 +489,9 @@ class Tokenizer:
         return self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE, HMM=HMM)
 
     def cut_for_search(self, text: str, HMM: bool = True):
+        del HMM
         seen: set[str] = set()
-        for word in self._token_texts(text, Mode.SEARCH, HMM=HMM):
+        for word in self._token_texts(text, Mode.SEARCH, HMM=False):
             if len(word) <= 1:
                 continue
             if word not in seen:
