@@ -98,5 +98,53 @@
     "expected_search_unique": true,
     "expected_search_min_len": 2,
     "tags": ["search", "mixed_text"]
+  },
+  {
+    "id": "structured_001",
+    "text": "https://example.com/a-b?x=1",
+    "expected": ["https://example.com/a-b?x=1"],
+    "tags": ["structured", "url"]
+  },
+  {
+    "id": "structured_002",
+    "text": "foo.bar+test@example.co.jp",
+    "expected": ["foo.bar+test@example.co.jp"],
+    "tags": ["structured", "email"]
+  },
+  {
+    "id": "structured_003",
+    "text": "2026-07-07T10:30:00+09:00",
+    "expected": ["2026-07-07T10:30:00+09:00"],
+    "tags": ["structured", "timestamp"]
+  },
+  {
+    "id": "structured_004",
+    "text": "7.2%",
+    "expected": ["7.2%"],
+    "tags": ["structured", "number"]
+  },
+  {
+    "id": "structured_005",
+    "text": "500mg",
+    "expected": ["500mg"],
+    "tags": ["structured", "unit"]
+  },
+  {
+    "id": "structured_006",
+    "text": "T+3日内",
+    "expected": ["T+3日内"],
+    "tags": ["structured", "finance"]
+  },
+  {
+    "id": "structured_007",
+    "text": "C:\\Users\\test\\a.txt",
+    "expected": ["C:\\Users\\test\\a.txt"],
+    "tags": ["structured", "windows_path"]
+  },
+  {
+    "id": "structured_008",
+    "text": "fe80::1ff:fe23:4567:890a",
+    "expected": ["fe80::1ff:fe23:4567:890a"],
+    "tags": ["structured", "ipv6"]
   }
 ]

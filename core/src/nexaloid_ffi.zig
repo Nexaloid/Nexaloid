@@ -353,7 +353,7 @@ const SegmentIter = struct {
 
 fn isSegmentBoundary(cp: u32) bool {
     return switch (cp) {
-        '\n', '\r', '!', '?', ';', 0x3002, 0xFF01, 0xFF1F, 0xFF1B => true,
+        '\n', '\r', '!', ';', 0x3002, 0xFF01, 0xFF1F, 0xFF1B => true,
         else => false,
     };
 }
