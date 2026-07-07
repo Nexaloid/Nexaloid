@@ -13,7 +13,7 @@
         }],
         ["OS==\"linux\"", {
           "libraries": ["-L<(module_root_dir)/../../core/zig-out/lib", "-lnexaloid"],
-          "ldflags": ["-Wl,-rpath,'$$ORIGIN'"]
+          "ldflags": ["-Wl,-rpath,$$ORIGIN"]
         }],
         ["OS==\"mac\"", {
           "libraries": ["-L<(module_root_dir)/../../core/zig-out/lib", "-lnexaloid"],

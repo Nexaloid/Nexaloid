@@ -10,7 +10,7 @@
   },
   "main": "index.js",
   "scripts": {
-    "build": "node-gyp rebuild",
+    "build": "node-gyp rebuild && node scripts/stage-local.js",
     "install": "node scripts/check-prebuild.js",
     "test:binding": "node test/regression.js"
   },
