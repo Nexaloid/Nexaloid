@@ -79,6 +79,8 @@ _BUILT_TEXT_DICT = _DICT_DIR / "nexaloid.tsv"
 _HMM_ARTIFACT = "bmes_hmm_wordhub_lattice.json"
 _HMM_MANIFEST = "bmes_hmm_wordhub_lattice.manifest.json"
 _DELETED_WORD_SCORE = -1_000_000.0
+_MAX_HMM_SEARCH_CHARS = 256
+_MAX_HMM_SEARCH_CACHE = 1024
 
 
 def _resolve_dict_path(dict_path: str | os.PathLike[str] | None) -> Path:
@@ -276,6 +278,7 @@ class Tokenizer:
         self._hmm_config_json: str | None = None
         self._hmm_ready = False
         self._plugins_loaded = False
+        self._hmm_search_cache: dict[str, tuple[str, ...]] = {}
         self._closed = False
         self._words: dict[str, float] = {}
         self._deleted: set[str] = set()
@@ -322,6 +325,7 @@ class Tokenizer:
             self._check(_LIB.nx_add_word(self._hmm_engine, data, len(data), 0, score, 0))
         self._words[word] = score
         self._deleted.discard(word)
+        self._hmm_search_cache.clear()
 
     def del_word(self, word: str) -> None:
         self._ensure_open()
@@ -336,6 +340,7 @@ class Tokenizer:
         self._check(_LIB.nx_reload_user_dict(self._engine, data))
         if self._hmm_engine is not None:
             self._check(_LIB.nx_reload_user_dict(self._hmm_engine, data))
+        self._hmm_search_cache.clear()
 
     def load_plugin(self, path: str | os.PathLike[str], config_json: str | None = None) -> None:
         self._ensure_open()
@@ -489,7 +494,6 @@ class Tokenizer:
         return self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE, HMM=HMM)
 
     def cut_for_search(self, text: str, HMM: bool = True):
-        del HMM
         seen: set[str] = set()
         for word in self._token_texts(text, Mode.SEARCH, HMM=False):
             if len(word) <= 1:
@@ -497,6 +501,45 @@ class Tokenizer:
             if word not in seen:
                 seen.add(word)
                 yield word
+        if HMM:
+            for word in self._cached_hmm_search_terms(text):
+                if len(word) > 1 and word not in seen:
+                    seen.add(word)
+                    yield word
+
+    def _cached_hmm_search_terms(self, text: str) -> tuple[str, ...]:
+        if len(text) > _MAX_HMM_SEARCH_CHARS:
+            return ()
+        cached = self._hmm_search_cache.get(text)
+        if cached is not None:
+            return cached
+        terms = tuple(self._hmm_search_terms(text))
+        if len(self._hmm_search_cache) >= _MAX_HMM_SEARCH_CACHE:
+            self._hmm_search_cache.clear()
+        self._hmm_search_cache[text] = terms
+        return terms
+
+    def _hmm_search_terms(self, text: str):
+        base = self._tokenize_with_engine(self._engine, text, Mode.ACCURATE)
+        cache: dict[str, list[str]] = {}
+        i = 0
+        while i < len(base):
+            if len(base[i].text) > 1 and base[i].source != "unknown":
+                i += 1
+                continue
+            start = i
+            while i < len(base) and (len(base[i].text) == 1 or base[i].source == "unknown"):
+                i += 1
+            end = i
+            if start > 0 and len(base[start - 1].text) <= 2:
+                start -= 1
+            snippet = text[base[start].start_char : base[end - 1].end_char]
+            if 2 <= len(snippet) <= 8:
+                words = cache.get(snippet)
+                if words is None:
+                    words = self._hmm_overlay_texts(snippet)
+                    cache[snippet] = words
+                yield from words
 
     def _engine_for_hmm(self, enabled: bool) -> ctypes.c_void_p:
         if not enabled:
