@@ -8,6 +8,13 @@ pub fn bundled_dict_path() -> PathBuf {
         .join("nexaloid.nxdict")
 }
 
+pub fn bundled_hmm_artifact_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("data")
+        .join("hmm")
+        .join("bmes_hmm_wordhub_lattice.json")
+}
+
 #[repr(C)]
 pub struct NxEngine {
     // Opaque native handle; Rust must never construct or inspect this value.

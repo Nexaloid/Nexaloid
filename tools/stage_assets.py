@@ -26,6 +26,17 @@ def copy_dict(dst: Path) -> None:
         copy_file(src / name, dst / name)
 
 
+def copy_hmm(dst: Path) -> None:
+    src = ROOT / "data" / "hmm"
+    dst.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "bmes_hmm_wordhub_lattice.json",
+        "bmes_hmm_wordhub_lattice.json.sha256",
+        "bmes_hmm_wordhub_lattice.manifest.json",
+    ):
+        copy_file(src / name, dst / name)
+
+
 def core_libs(target_platform: str | None = None) -> list[Path]:
     target_platform = target_platform or platform_tag()
     if target_platform.startswith("windows-"):
@@ -41,16 +52,52 @@ def core_libs(target_platform: str | None = None) -> list[Path]:
     return libs
 
 
+def plugin_libs(target_platform: str | None = None) -> list[Path]:
+    target_platform = target_platform or platform_tag()
+    if target_platform.startswith("windows-"):
+        name = "nexaloid_plugin_hmm_lattice.dll"
+    elif target_platform.startswith("darwin-"):
+        name = "nexaloid_plugin_hmm_lattice.dylib"
+    else:
+        name = "nexaloid_plugin_hmm_lattice.so"
+    return [path for path in (ROOT / "core/zig-out").rglob(name)]
+
+
+def ensure_plugin_libs(target_platform: str | None = None) -> list[Path]:
+    libs = plugin_libs(target_platform)
+    if libs:
+        return libs
+    subprocess.run(
+        ["zig", "build-lib", "-dynamic", "-lc", "--name", "nexaloid_plugin_hmm_lattice", "tools/hmm_lattice_plugin.zig"],
+        cwd=ROOT,
+        check=True,
+    )
+    out_dir = ROOT / "core" / "zig-out" / "lib"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target_platform = target_platform or platform_tag()
+    if target_platform.startswith("windows-"):
+        copy_file(ROOT / "nexaloid_plugin_hmm_lattice.dll", out_dir / "nexaloid_plugin_hmm_lattice.dll")
+    elif target_platform.startswith("darwin-"):
+        copy_file(ROOT / "libnexaloid_plugin_hmm_lattice.dylib", out_dir / "nexaloid_plugin_hmm_lattice.dylib")
+    else:
+        copy_file(ROOT / "libnexaloid_plugin_hmm_lattice.so", out_dir / "nexaloid_plugin_hmm_lattice.so")
+    return plugin_libs(target_platform)
+
+
 def stage_python() -> None:
     pkg = ROOT / "bindings/python/src/nexaloid"
     copy_dict(pkg / "data/dict")
+    copy_hmm(pkg / "data/hmm")
     for src in core_libs():
         if src.suffix != ".lib":
             copy_file(src, pkg / "native" / src.name)
+    for src in ensure_plugin_libs():
+        copy_file(src, pkg / "native" / src.name)
 
 
 def stage_rust(target_platform: str | None = None) -> None:
     copy_file(ROOT / "data/dict/nexaloid.nxdict", ROOT / "bindings/rust/nexaloid-sys/data/dict/nexaloid.nxdict")
+    copy_hmm(ROOT / "bindings/rust/nexaloid-sys/data/hmm")
     native = ROOT / "bindings/rust/nexaloid-sys/native" / (target_platform or platform_tag())
     for src in core_libs(target_platform):
         copy_file(src, native / src.name)
@@ -65,10 +112,13 @@ def stage_rust_platform_crate(target_platform: str) -> None:
 def stage_node(include_addon: bool) -> None:
     pkg = ROOT / "bindings/node"
     copy_dict(pkg / "data/dict")
+    copy_hmm(pkg / "data/hmm")
     prebuild = pkg / "prebuilds" / platform_tag()
     for src in core_libs():
         if src.suffix != ".lib":
             copy_file(src, prebuild / src.name)
+    for src in ensure_plugin_libs():
+        copy_file(src, prebuild / src.name)
     if include_addon:
         addon = prebuild / "nexaloid_node.node"
         copy_file(pkg / "build/Release/nexaloid_node.node", addon)

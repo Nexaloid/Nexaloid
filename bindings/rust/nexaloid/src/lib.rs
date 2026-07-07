@@ -3,6 +3,10 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::path::Path;
 
+pub fn bundled_hmm_artifact_path() -> std::path::PathBuf {
+    sys::bundled_hmm_artifact_path()
+}
+
 #[derive(Debug)]
 pub struct Error {
     pub status: sys::NxStatus,

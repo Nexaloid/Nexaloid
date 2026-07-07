@@ -35,6 +35,12 @@ jobs:
       - name: Build native library
         run: zig build -Doptimize=ReleaseFast
         working-directory: core
+      - name: Build HMM plugin
+        run: |
+          zig build-lib -dynamic -lc --name nexaloid_plugin_hmm_lattice tools/hmm_lattice_plugin.zig
+          mkdir -p core/zig-out/lib
+          cp libnexaloid_plugin_hmm_lattice.so core/zig-out/lib/nexaloid_plugin_hmm_lattice.so
+        shell: bash
       - name: Run regression checks
         run: python tools/regression_checks.py
       - name: Run plugin integration checks
@@ -65,6 +71,12 @@ jobs:
       - name: Build native library
         run: zig build -Doptimize=ReleaseFast
         working-directory: core
+      - name: Build HMM plugin
+        run: |
+          zig build-lib -dynamic -lc --name nexaloid_plugin_hmm_lattice tools/hmm_lattice_plugin.zig
+          mkdir -p core/zig-out/lib
+          cp libnexaloid_plugin_hmm_lattice.so core/zig-out/lib/nexaloid_plugin_hmm_lattice.so
+        shell: bash
       - name: Install Python build tools
         run: python -m pip install -U build
       - name: Stage package assets
@@ -84,7 +96,7 @@ jobs:
         run: python -m pip install --force-reinstall bindings/python/dist/*.whl
         shell: bash
       - name: Regression test Python binding
-        run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
+        run: python -c "from nexaloid import Tokenizer; t=Tokenizer(); assert '/'.join(t.lcut('南京市长江大桥')) == '南京市/长江大桥'; assert t.lcut('小明硕士毕业', HMM=True) == ['小明', '硕士', '毕业']; t.close()"
 
   native-binding-regression:
     name: Native binding regression (${{ matrix.language }})
@@ -246,6 +258,17 @@ jobs:
       - name: Cross-build native library
         run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target.zig_target }}
         working-directory: core
+      - name: Cross-build HMM plugin
+        run: |
+          rm -f *nexaloid_plugin_hmm_lattice*
+          zig build-lib -dynamic -lc --name nexaloid_plugin_hmm_lattice -target "${{ matrix.target.zig_target }}" tools/hmm_lattice_plugin.zig
+          mkdir -p core/zig-out/lib
+          case "${{ matrix.target.platform }}" in
+            windows-*) cp nexaloid_plugin_hmm_lattice.dll core/zig-out/lib/nexaloid_plugin_hmm_lattice.dll ;;
+            darwin-*) cp libnexaloid_plugin_hmm_lattice.dylib core/zig-out/lib/nexaloid_plugin_hmm_lattice.dylib ;;
+            *) cp libnexaloid_plugin_hmm_lattice.so core/zig-out/lib/nexaloid_plugin_hmm_lattice.so ;;
+          esac
+        shell: bash
       - name: Package native SDK
         run: python tools/package_native_sdk.py --version 0.0.0-ci --platform ${{ matrix.target.platform }} --language all --out-dir dist/native-ci
 
@@ -335,7 +358,7 @@ jobs:
         run: python -m pip install --force-reinstall bindings/python/dist/*.whl
         shell: bash
       - name: Regression test Python binding
-        run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
+        run: python -c "from nexaloid import Tokenizer; t=Tokenizer(); assert '/'.join(t.lcut('南京市长江大桥')) == '南京市/长江大桥'; assert t.lcut('小明硕士毕业', HMM=True) == ['小明', '硕士', '毕业']; t.close()"
 
   node-versions:
     name: Node.js ${{ matrix.node }} compatibility

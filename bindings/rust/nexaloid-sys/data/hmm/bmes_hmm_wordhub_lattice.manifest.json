@@ -1,0 +1,51 @@
+{
+  "artifact": "data/releases/hmm/bmes_hmm_wordhub_lattice.json",
+  "artifact_sha256": "5876df1d7a98ac220c042d3bfb4e82a59af94f6c307b3175e2c4607df9fd0782",
+  "decoder": {
+    "kind": "bmes_hmm_lexicon_lattice",
+    "lexicon_bonus": 8.0,
+    "max_unknown_len": 2,
+    "max_word_len": 10,
+    "unknown_penalty": -4.0
+  },
+  "inputs": {
+    "badcases": "data/tasks/unk_hmm/eval_badcases.tsv",
+    "badcases_sha256": "6572b55b2a0535e31da59c20c103f0cfca136e45669d42959ed8f24fb5183471",
+    "heldout": "data/tasks/unk_hmm/eval_wordhub.tsv",
+    "heldout_sha256": "3719110a5452b9b902894c758bcfb0d80896f203a8b55be92355fb75d5cffecd",
+    "lexicon": "data/tasks/unk_hmm/lexicon_wordhub.txt",
+    "lexicon_sha256": "780d4e6b777dc02f7ae055ee76803c6b263ef35828cb937f07f4b8faa19e57e4",
+    "model": "data/tasks/unk_hmm/bmes_hmm_wordhub.json",
+    "model_sha256": "e5214acede7df1e6babc5430a23f1adc23366e43805878057231b8b8c5e45def"
+  },
+  "lexicon_size": 10779,
+  "model_schema": "nexaloid.hmm_bmes.v2",
+  "name": "bmes_hmm_wordhub_lattice",
+  "quality": {
+    "lattice_badcases": {
+      "boundary_f1": 1.0,
+      "passed": 16,
+      "token_f1": 1.0,
+      "total": 16
+    },
+    "lattice_heldout": {
+      "boundary_f1": 1.0,
+      "passed": 400,
+      "token_f1": 1.0,
+      "total": 400
+    },
+    "pure_badcases": {
+      "boundary_f1": 1.0,
+      "passed": 16,
+      "token_f1": 1.0,
+      "total": 16
+    },
+    "pure_heldout": {
+      "boundary_f1": 0.9590973201692525,
+      "passed": 303,
+      "token_f1": 0.9147414741474148,
+      "total": 400
+    }
+  },
+  "schema": "nexaloid.hmm_manifest.v1"
+}
