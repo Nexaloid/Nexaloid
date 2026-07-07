@@ -121,6 +121,67 @@ def check_token_coverage() -> None:
         tokenizer.close()
 
 
+def check_traditional_mixed_text() -> None:
+    tokenizer = Tokenizer()
+    try:
+        assert tokenizer.lcut("臺灣使用者登入後，系統會顯示後臺數據。", HMM=False) == [
+            "臺灣",
+            "使用者",
+            "登入",
+            "後",
+            "，",
+            "系統",
+            "會",
+            "顯示",
+            "後臺",
+            "數據",
+            "。",
+        ]
+        assert tokenizer.lcut("我們在日本東京做RAG中文檢索實驗", HMM=False) == [
+            "我們",
+            "在",
+            "日本",
+            "東京",
+            "做",
+            "RAG",
+            "中文",
+            "檢索",
+            "實驗",
+        ]
+        assert tokenizer.lcut("這款Type-C轉HDMI2.1線支援4K輸出", HMM=False) == [
+            "這款",
+            "Type-C",
+            "轉",
+            "HDMI2.1",
+            "線",
+            "支援",
+            "4K",
+            "輸出",
+        ]
+        assert tokenizer.lcut("中級人民法院審理合同糾紛案件", HMM=False) == [
+            "中級人民法院",
+            "審理",
+            "合同",
+            "糾紛案件",
+        ]
+        assert tokenizer.lcut("註冊會計師查看資產負債表", HMM=False) == [
+            "註冊會計師",
+            "查看",
+            "資產負債表",
+        ]
+        assert tokenizer.lcut("患者服用二甲雙胍500mg後血糖下降", HMM=False) == [
+            "患者",
+            "服用",
+            "二甲雙胍",
+            "500mg",
+            "後",
+            "血糖",
+            "下降",
+        ]
+    finally:
+        tokenizer.close()
+
+
 def check_version_exported() -> None:
     import nexaloid
 
@@ -196,6 +257,7 @@ def main() -> int:
         check_del_word_falls_back,
         check_del_word_base_falls_back,
         check_token_coverage,
+        check_traditional_mixed_text,
         check_version_exported,
         check_repo_dict_preferred,
         check_python_hmm_artifact_path,

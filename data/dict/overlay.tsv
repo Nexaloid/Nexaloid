@@ -34,6 +34,48 @@ Python3.11	20	nx
 Windows	15	nx
 计算所	15	n
 
+# traditional / mixed Chinese overlay
+臺灣	20	ns
+台灣	20	ns
+使用者	18	n
+登入	18	v
+系統	18	n
+顯示	18	v
+後臺	18	n
+後台	18	n
+數據	18	n
+資料庫	20	n
+繁體	18	n
+東京	18	ns
+檢索	18	v
+實驗	18	n
+我們	20	r
+用戶	18	n
+訂單	18	n
+狀態	18	n
+後端	18	n
+服務	18	n
+連接	18	v
+失敗	18	v
+混合檢索	20	n
+關鍵詞	18	n
+手機	18	n
+應用程式	20	n
+帳號	18	n
+資訊	18	n
+支援	18	v
+輸出	18	v
+這款	18	r
+資料	18	n
+中文	15	n
+正常	15	a
+發布	18	v
+發佈	18	v
+研究報告	18	n
+二甲双胍	18	n
+二甲雙胍	18	n
+血糖	15	n
+
 # reviewed NexaloidData candidates
 中级人民法院	16.3863	n
 信息披露	16.3863	n

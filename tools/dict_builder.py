@@ -55,6 +55,13 @@ def read_overlay(path: Path) -> list[tuple[str, float, str]]:
     return rows
 
 
+def read_overlays(paths: list[Path]) -> list[tuple[str, float, str]]:
+    rows: list[tuple[str, float, str]] = []
+    for path in paths:
+        rows.extend(read_overlay(path))
+    return rows
+
+
 def read_demotions(path: Path) -> list[tuple[str, float]]:
     if not path.exists():
         return []
@@ -84,6 +91,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--jieba-dict", type=Path)
     parser.add_argument("--overlay", type=Path, default=ROOT / "data" / "dict" / "overlay.tsv")
+    parser.add_argument(
+        "--generated-overlay",
+        type=Path,
+        action="append",
+        default=[ROOT / "data" / "dict" / "generated" / "traditional.generated.tsv"],
+    )
     parser.add_argument("--demote", type=Path, default=ROOT / "data" / "dict" / "demote.tsv")
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "dict" / "nexaloid.tsv")
     args = parser.parse_args()
@@ -98,6 +111,8 @@ def main() -> int:
     for word, score in read_demotions(args.demote):
         if word in merged:
             merged[word] = (score, merged[word][1])
+    for word, score, pos in read_overlays(args.generated_overlay):
+        merged[word] = (score, pos)
     for word, score, pos in read_overlay(args.overlay):
         merged[word] = (score, pos)
 
