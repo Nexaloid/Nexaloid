@@ -17,6 +17,14 @@ const prebuild = path.join(prebuildDir, "nexaloid_node.node");
 const native = require(fs.existsSync(localBuild) ? localBuild : fs.existsSync(prebuild) ? prebuild : localBuild);
 const packagedDict = path.join(__dirname, "data", "dict", "nexaloid.tsv");
 const repoDict = path.join(root, "data", "dict", "nexaloid.tsv");
+const hmmArtifactName = "bmes_hmm_wordhub_lattice.json";
+const hmmManifestName = "bmes_hmm_wordhub_lattice.manifest.json";
+const packagedHmmArtifact = path.join(__dirname, "data", "hmm", hmmArtifactName);
+const repoHmmArtifact = path.join(root, "data", "hmm", hmmArtifactName);
+const packagedHmmManifest = path.join(__dirname, "data", "hmm", hmmManifestName);
+const repoHmmManifest = path.join(root, "data", "hmm", hmmManifestName);
+const hmmArtifactPath = fs.existsSync(repoHmmArtifact) ? repoHmmArtifact : packagedHmmArtifact;
+const hmmManifestPath = fs.existsSync(repoHmmManifest) ? repoHmmManifest : packagedHmmManifest;
 
 // JavaScript stays as a convenience shell; segmentation is implemented by the native addon.
 class Tokenizer extends native.Tokenizer {
@@ -46,6 +54,9 @@ class Tokenizer extends native.Tokenizer {
 
 module.exports = {
   Tokenizer,
+  hmmArtifactPath,
+  hmmManifestPath,
+  hmmManifest: () => JSON.parse(fs.readFileSync(hmmManifestPath, "utf8")),
   Mode: {
     ACCURATE: 0,
     FULL: 1,

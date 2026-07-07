@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import sys
 from enum import IntEnum
@@ -70,9 +71,13 @@ _SOURCES = {
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _DICT_DIR = _PACKAGE_DIR / "data" / "dict"
+_HMM_DIR = _PACKAGE_DIR / "data" / "hmm"
 _REPO_DICT_DIR = Path(__file__).resolve().parents[4] / "data" / "dict"
+_REPO_HMM_DIR = Path(__file__).resolve().parents[4] / "data" / "hmm"
 _BUILT_DICT = _DICT_DIR / "nexaloid.nxdict"
 _BUILT_TEXT_DICT = _DICT_DIR / "nexaloid.tsv"
+_HMM_ARTIFACT = "bmes_hmm_wordhub_lattice.json"
+_HMM_MANIFEST = "bmes_hmm_wordhub_lattice.manifest.json"
 _DELETED_WORD_SCORE = -1_000_000.0
 
 
@@ -90,6 +95,24 @@ def _resolve_dict_path(dict_path: str | os.PathLike[str] | None) -> Path:
     if _BUILT_TEXT_DICT.exists():
         return _BUILT_TEXT_DICT
     return repo_text
+
+
+def hmm_artifact_path() -> Path:
+    repo_artifact = _REPO_HMM_DIR / _HMM_ARTIFACT
+    if repo_artifact.exists():
+        return repo_artifact
+    return _HMM_DIR / _HMM_ARTIFACT
+
+
+def hmm_manifest_path() -> Path:
+    repo_manifest = _REPO_HMM_DIR / _HMM_MANIFEST
+    if repo_manifest.exists():
+        return repo_manifest
+    return _HMM_DIR / _HMM_MANIFEST
+
+
+def hmm_manifest() -> dict:
+    return json.loads(hmm_manifest_path().read_text(encoding="utf-8"))
 
 
 def _resolve_domain_dict_path(domain: str | None) -> Path | None:
@@ -113,6 +136,31 @@ def _plugin_extension() -> str:
     if sys.platform == "darwin":
         return ".dylib"
     return ".so"
+
+
+def _hmm_plugin_name() -> str:
+    if sys.platform == "win32":
+        return "nexaloid_plugin_hmm_lattice.dll"
+    if sys.platform == "darwin":
+        return "nexaloid_plugin_hmm_lattice.dylib"
+    return "nexaloid_plugin_hmm_lattice.so"
+
+
+def _resolve_hmm_plugin_path() -> Path:
+    explicit = os.environ.get("NEXALOID_HMM_PLUGIN")
+    if explicit:
+        return Path(explicit)
+    name = _hmm_plugin_name()
+    root = Path(__file__).resolve().parents[4]
+    candidates = [
+        _PACKAGE_DIR / "native" / name,
+        root / "core" / "zig-out" / "lib" / name,
+        root / "core" / "zig-out" / "bin" / name,
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
 
 
 def _iter_plugin_paths(path: str | os.PathLike[str]):
@@ -218,23 +266,39 @@ class Tokenizer:
         plugin_dir: str | os.PathLike[str] | None = None,
         plugin_config_json: str | None = None,
     ):
-        self._engine = ctypes.c_void_p()
-        config = _NxConfig()
         resolved_dict = _resolve_dict_path(dict_path)
         resolved_domain_dict = _resolve_domain_dict_path(domain)
-        if resolved_dict.exists():
-            config.dict_path = str(resolved_dict).encode("utf-8")
-        if resolved_domain_dict is not None:
-            config.user_dict_path = str(resolved_domain_dict).encode("utf-8")
-        self._check(_LIB.nx_engine_new(ctypes.byref(config), ctypes.byref(self._engine)))
+        self._dict_path = resolved_dict if resolved_dict.exists() else None
+        self._user_dict_path = resolved_domain_dict
+        self._engine = self._open_engine()
+        self._hmm_engine: ctypes.c_void_p | None = None
+        self._hmm_plugin_path: Path | None = None
+        self._hmm_config_json: str | None = None
+        self._hmm_ready = False
+        self._plugins_loaded = False
         self._closed = False
         self._words: dict[str, float] = {}
         self._deleted: set[str] = set()
         if plugin_dir is not None:
             self.load_plugins(plugin_dir, plugin_config_json)
 
+    def _open_engine(self) -> ctypes.c_void_p:
+        engine = ctypes.c_void_p()
+        config = _NxConfig()
+        resolved_dict = self._dict_path
+        resolved_user_dict = self._user_dict_path
+        if resolved_dict is not None and resolved_dict.exists():
+            config.dict_path = str(resolved_dict).encode("utf-8")
+        if resolved_user_dict is not None:
+            config.user_dict_path = str(resolved_user_dict).encode("utf-8")
+        self._check(_LIB.nx_engine_new(ctypes.byref(config), ctypes.byref(engine)))
+        return engine
+
     def close(self) -> None:
         if not self._closed:
+            if self._hmm_engine is not None:
+                _LIB.nx_engine_free(self._hmm_engine)
+                self._hmm_engine = None
             _LIB.nx_engine_free(self._engine)
             self._engine = ctypes.c_void_p()
             self._closed = True
@@ -254,6 +318,8 @@ class Tokenizer:
     def _add_word_score(self, word: str, score: float) -> None:
         data = word.encode("utf-8")
         self._check(_LIB.nx_add_word(self._engine, data, len(data), 0, score, 0))
+        if self._hmm_engine is not None:
+            self._check(_LIB.nx_add_word(self._hmm_engine, data, len(data), 0, score, 0))
         self._words[word] = score
         self._deleted.discard(word)
 
@@ -264,14 +330,19 @@ class Tokenizer:
 
     def load_userdict(self, path: str | os.PathLike[str]) -> None:
         self._ensure_open()
-        data = str(Path(path)).encode("utf-8")
+        resolved = Path(path)
+        self._user_dict_path = resolved
+        data = str(resolved).encode("utf-8")
         self._check(_LIB.nx_reload_user_dict(self._engine, data))
+        if self._hmm_engine is not None:
+            self._check(_LIB.nx_reload_user_dict(self._hmm_engine, data))
 
     def load_plugin(self, path: str | os.PathLike[str], config_json: str | None = None) -> None:
         self._ensure_open()
         path_data = str(Path(path)).encode("utf-8")
         config_data = None if config_json is None else config_json.encode("utf-8")
         self._check(_LIB.nx_load_plugin(self._engine, path_data, config_data))
+        self._plugins_loaded = True
 
     def load_plugins(self, path: str | os.PathLike[str], config_json: str | None = None) -> None:
         self._ensure_open()
@@ -284,7 +355,7 @@ class Tokenizer:
             self.add_word(word, freq=20.0)
         return self._words.get(word, 0)
 
-    def tokenize(self, text: str, mode: Mode = Mode.ACCURATE) -> list[Token]:
+    def _tokenize_with_engine(self, engine: ctypes.c_void_p, text: str, mode: Mode = Mode.ACCURATE) -> list[Token]:
         self._ensure_open()
         data = text.encode("utf-8")
         out: list[Token] = []
@@ -310,8 +381,11 @@ class Tokenizer:
                 )
             )
 
-        self._check(_LIB.nx_tokenize(self._engine, data, len(data), int(mode), on_token, None))
+        self._check(_LIB.nx_tokenize(engine, data, len(data), int(mode), on_token, None))
         return out
+
+    def tokenize(self, text: str, mode: Mode = Mode.ACCURATE) -> list[Token]:
+        return self._tokenize_with_engine(self._engine, text, mode)
 
     def tokenize_batch(
         self,
@@ -362,8 +436,11 @@ class Tokenizer:
         )
         return out
 
-    def _token_texts(self, text: str, mode: Mode) -> list[str]:
+    def _token_texts(self, text: str, mode: Mode, HMM: bool = False) -> list[str]:
+        if HMM and mode == Mode.ACCURATE:
+            return self._hmm_overlay_texts(text)
         self._ensure_open()
+        engine = self._engine_for_hmm(HMM)
         data = text.encode("utf-8")
         out: list[str] = []
 
@@ -377,27 +454,72 @@ class Tokenizer:
                 return
             out.append(part)
 
-        self._check(_LIB.nx_tokenize(self._engine, data, len(data), int(mode), on_token, None))
+        self._check(_LIB.nx_tokenize(engine, data, len(data), int(mode), on_token, None))
+        return out
+
+    def _hmm_overlay_texts(self, text: str) -> list[str]:
+        base = self._tokenize_with_engine(self._engine, text, Mode.ACCURATE)
+        hmm = self._tokenize_with_engine(self._engine_for_hmm(True), text, Mode.ACCURATE)
+        out: list[str] = []
+        i = 0
+        h = 0
+        while i < len(base):
+            while h < len(hmm) and hmm[h].end_byte <= base[i].start_byte:
+                h += 1
+            if h < len(hmm) and hmm[h].start_byte == base[i].start_byte and hmm[h].end_byte > base[i].end_byte:
+                j = i
+                has_single = False
+                while j < len(base) and base[j].end_byte <= hmm[h].end_byte:
+                    has_single = has_single or len(base[j].text) == 1
+                    j += 1
+                if j > i + 1 and base[j - 1].end_byte == hmm[h].end_byte and has_single:
+                    out.append(hmm[h].text)
+                    i = j
+                    h += 1
+                    continue
+            out.append(base[i].text)
+            i += 1
         return out
 
     def cut(self, text: str, cut_all: bool = False, HMM: bool = True):
-        del HMM
         mode = Mode.FULL if cut_all else Mode.ACCURATE
-        yield from self._token_texts(text, mode)
+        yield from self._token_texts(text, mode, HMM=HMM)
 
     def lcut(self, text: str, cut_all: bool = False, HMM: bool = True) -> list[str]:
-        del HMM
-        return self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE)
+        return self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE, HMM=HMM)
 
     def cut_for_search(self, text: str, HMM: bool = True):
-        del HMM
         seen: set[str] = set()
-        for word in self._token_texts(text, Mode.SEARCH):
+        for word in self._token_texts(text, Mode.SEARCH, HMM=HMM):
             if len(word) <= 1:
                 continue
             if word not in seen:
                 seen.add(word)
                 yield word
+
+    def _engine_for_hmm(self, enabled: bool) -> ctypes.c_void_p:
+        if not enabled:
+            return self._engine
+        if self._plugins_loaded:
+            return self._engine
+        if self._hmm_ready and self._hmm_engine is not None:
+            return self._hmm_engine
+
+        plugin_path = _resolve_hmm_plugin_path()
+        if not plugin_path.exists():
+            raise NexaloidError(f"HMM plugin not found: {plugin_path}")
+        config_json = json.dumps({"artifact": str(hmm_artifact_path()), "hmm_score": -14.0})
+        self._hmm_engine = self._open_engine()
+        for word, score in self._words.items():
+            data = word.encode("utf-8")
+            self._check(_LIB.nx_add_word(self._hmm_engine, data, len(data), 0, score, 0))
+        path_data = str(plugin_path).encode("utf-8")
+        config_data = config_json.encode("utf-8")
+        self._check(_LIB.nx_load_plugin(self._hmm_engine, path_data, config_data))
+        self._hmm_plugin_path = plugin_path
+        self._hmm_config_json = config_json
+        self._hmm_ready = True
+        return self._hmm_engine
 
     def _check(self, status: int) -> None:
         if status != 0:

@@ -5,7 +5,7 @@ pub fn matchAll(chars: []const types.NxChar, ctx: anytype, comptime emit: anytyp
     var i: usize = 0;
     while (i < chars.len) {
         if (structuredEnd(chars, i)) |end| {
-            try emitRule(ctx, emit, chars, i, end, 8.0);
+            try emitRule(ctx, emit, chars, i, end, 300.0);
             i = end;
             continue;
         }
@@ -215,4 +215,36 @@ test "rule matcher groups mixed ascii model names" {
     try std.testing.expectEqual(@as(u32, 7), edge_ctx.edges[0].end_byte);
     try std.testing.expectEqual(@as(u32, 8), edge_ctx.edges[1].start_byte);
     try std.testing.expectEqual(@as(u32, 16), edge_ctx.edges[1].end_byte);
+}
+
+test "rule matcher gives market day enough score to win" {
+    const scanner = @import("../scanner/utf8.zig");
+    const CharCtx = struct {
+        chars: [8]types.NxChar = undefined,
+        count: usize = 0,
+    };
+    var char_ctx = CharCtx{};
+    try scanner.scan("T+3日内", &char_ctx, struct {
+        fn emit(ctx: *CharCtx, ch: types.NxChar) !void {
+            ctx.chars[ctx.count] = ch;
+            ctx.count += 1;
+        }
+    }.emit);
+
+    const EdgeCtx = struct {
+        edges: [4]types.NxEdge = undefined,
+        count: usize = 0,
+    };
+    var edge_ctx = EdgeCtx{};
+    try matchAll(char_ctx.chars[0..char_ctx.count], &edge_ctx, struct {
+        fn emit(ctx: *EdgeCtx, edge: types.NxEdge) !void {
+            ctx.edges[ctx.count] = edge;
+            ctx.count += 1;
+        }
+    }.emit);
+
+    try std.testing.expectEqual(@as(usize, 1), edge_ctx.count);
+    try std.testing.expectEqual(@as(u32, 0), edge_ctx.edges[0].start_char);
+    try std.testing.expectEqual(@as(u32, 5), edge_ctx.edges[0].end_char);
+    try std.testing.expect(edge_ctx.edges[0].score > 100.0);
 }

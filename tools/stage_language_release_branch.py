@@ -20,6 +20,16 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def copy_hmm(out_dir: Path) -> None:
+    src = ROOT / "data" / "hmm"
+    for name in (
+        "bmes_hmm_wordhub_lattice.json",
+        "bmes_hmm_wordhub_lattice.json.sha256",
+        "bmes_hmm_wordhub_lattice.manifest.json",
+    ):
+        copy(src / name, out_dir / "data" / "hmm" / name)
+
+
 def stage(language: str, version: str, out_dir: Path) -> None:
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -29,6 +39,8 @@ def stage(language: str, version: str, out_dir: Path) -> None:
     copy(ROOT / "core" / "include" / "nexaloid.h", out_dir / "include" / "nexaloid.h")
     copy(ROOT / "core" / "include" / "nexaloid_plugin.h", out_dir / "include" / "nexaloid_plugin.h")
     copy(ROOT / "data" / "dict" / "nexaloid.nxdict", out_dir / "data" / "dict" / "nexaloid.nxdict")
+    copy_hmm(out_dir)
+    copy(ROOT / "tools" / "hmm_lattice_plugin.zig", out_dir / "plugins" / "hmm_lattice_plugin.zig")
 
     if language == "c":
         copy(ROOT / "bindings" / "c" / "tests" / "regression.c", out_dir / "examples" / "regression.c")
@@ -60,6 +72,10 @@ Download the matching `nexaloid-{language}-<version>-<platform>.zip` asset from 
 ```
 
 The dictionary is bundled at `data/dict/nexaloid.nxdict`.
+The optional BMES HMM lattice artifact is bundled at `data/hmm/bmes_hmm_wordhub_lattice.json`.
+The optional HMM CandidateProvider plugin source is bundled at `plugins/hmm_lattice_plugin.zig`.
+Matching release assets include a prebuilt `lib/nexaloid_plugin_hmm_lattice.*` when available.
+Use the artifact path directly as plugin config, or pass JSON like `{{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.json","hmm_score":-14.0}}` to calibrate HMM candidate weight.
 """,
     )
 

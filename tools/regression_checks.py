@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import hashlib
 import tempfile
 from importlib import metadata
 from pathlib import Path
@@ -24,7 +25,10 @@ if str(ROOT / "tools") not in sys.path:
 from nexaloid import Tokenizer  # noqa: E402
 from nexaloid.tokenizer import _resolve_dict_path  # noqa: E402
 from nexaloid.tokenizer import NexaloidError  # noqa: E402
+from check_hmm_artifact import main as check_hmm_artifact_main  # noqa: E402
+from hmm_score_audit import main as hmm_score_audit_main  # noqa: E402
 from nxdict_builder import build as build_nxdict  # noqa: E402
+from plugin_integration_checks import main as plugin_integration_main  # noqa: E402
 
 
 def expect_error(fn, text: str) -> None:
@@ -77,7 +81,7 @@ def check_nxdict_userdict() -> None:
         tokenizer = Tokenizer(dict_path=tmp_path / "missing.tsv")
         try:
             tokenizer.load_userdict(nxdict)
-            assert tokenizer.lcut("火星基地") == ["火星基地"]
+            assert tokenizer.lcut("火星基地", HMM=False) == ["火星基地"]
         finally:
             tokenizer.close()
 
@@ -87,7 +91,7 @@ def check_del_word_falls_back() -> None:
     try:
         tokenizer.add_word("火山知识库", freq=1000000)
         tokenizer.del_word("火山知识库")
-        assert tokenizer.lcut("A火山知识库B") == ["A", "火山", "知识库", "B"]
+        assert tokenizer.lcut("A火山知识库B", HMM=False) == ["A", "火山", "知识库", "B"]
     finally:
         tokenizer.close()
 
@@ -131,6 +135,46 @@ def check_repo_dict_preferred() -> None:
     assert _resolve_dict_path(None) == ROOT / "data" / "dict" / "nexaloid.nxdict"
 
 
+def check_python_hmm_artifact_path() -> None:
+    from nexaloid import hmm_artifact_path, hmm_manifest, hmm_manifest_path
+
+    path = hmm_artifact_path()
+    assert path == ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.json"
+    assert path.exists()
+    assert hmm_manifest_path() == ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.manifest.json"
+    manifest = hmm_manifest()
+    assert manifest["schema"] == "nexaloid.hmm_manifest.v1"
+    assert manifest["quality"]["lattice_heldout"]["token_f1"] >= 0.98
+
+
+def check_bundled_hmm_artifact() -> None:
+    assert check_hmm_artifact_main() == 0
+
+
+def check_python_hmm_true_enabled() -> None:
+    tokenizer = Tokenizer()
+    try:
+        assert tokenizer.lcut("南京市长江大桥") == ["南京市", "长江大桥"]
+        assert tokenizer.lcut("小明硕士毕业", HMM=False) == ["小", "明", "硕士", "毕业"]
+        assert tokenizer.lcut("小明硕士毕业", HMM=True) == ["小明", "硕士", "毕业"]
+    finally:
+        tokenizer.close()
+
+
+def check_rust_sys_hmm_artifact_synced() -> None:
+    root_artifact = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.json"
+    rust_artifact = ROOT / "bindings" / "rust" / "nexaloid-sys" / "data" / "hmm" / root_artifact.name
+    assert hashlib.sha256(root_artifact.read_bytes()).digest() == hashlib.sha256(rust_artifact.read_bytes()).digest()
+
+
+def check_plugin_integration() -> None:
+    assert plugin_integration_main() == 0
+
+
+def check_hmm_score_audit() -> None:
+    assert hmm_score_audit_main() == 0
+
+
 def main() -> int:
     os.environ.setdefault("PYTHONUTF8", "1")
     checks = [
@@ -142,6 +186,12 @@ def main() -> int:
         check_token_coverage,
         check_version_exported,
         check_repo_dict_preferred,
+        check_python_hmm_artifact_path,
+        check_bundled_hmm_artifact,
+        check_python_hmm_true_enabled,
+        check_rust_sys_hmm_artifact_synced,
+        check_plugin_integration,
+        check_hmm_score_audit,
     ]
     failed = 0
     for check in checks:

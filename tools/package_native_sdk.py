@@ -24,11 +24,34 @@ def native_libs(platform: str) -> list[Path]:
     return libs
 
 
+def plugin_lib_name(platform: str) -> str:
+    if platform.startswith("windows-"):
+        return "nexaloid_plugin_hmm_lattice.dll"
+    if platform.startswith("darwin-"):
+        return "nexaloid_plugin_hmm_lattice.dylib"
+    return "nexaloid_plugin_hmm_lattice.so"
+
+
+def native_plugins(platform: str) -> list[Path]:
+    name = plugin_lib_name(platform)
+    return [path for path in (ROOT / "core" / "zig-out").rglob(name)]
+
+
 def copy(src: Path, dst: Path) -> None:
     if not src.exists():
         raise FileNotFoundError(src)
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
+
+
+def copy_hmm(root: Path) -> None:
+    src = ROOT / "data" / "hmm"
+    for name in (
+        "bmes_hmm_wordhub_lattice.json",
+        "bmes_hmm_wordhub_lattice.json.sha256",
+        "bmes_hmm_wordhub_lattice.manifest.json",
+    ):
+        copy(src / name, root / "data" / "hmm" / name)
 
 
 def zip_dir(src: Path, out: Path) -> None:
@@ -65,6 +88,9 @@ def copy_language_files(language: str, root: Path) -> None:
     if language in ("all", "zig"):
         copy(ROOT / "bindings" / "zig" / "tests" / "regression.zig", root / "examples" / "zig" / "regression.zig")
 
+    if language in ("all", "c", "cpp", "zig"):
+        copy(ROOT / "tools" / "hmm_lattice_plugin.zig", root / "plugins" / "hmm_lattice_plugin.zig")
+
 
 def write_package_readme(root: Path, version: str, platform: str, language: str) -> None:
     if language == "all":
@@ -88,9 +114,13 @@ Platform: {platform}
 - `include/`: public C ABI headers and optional C++ wrapper
 - `lib/`: platform native library files
 - `data/dict/nexaloid.nxdict`: bundled dictionary
+- `data/hmm/`: optional BMES HMM lattice artifact and manifest
+- `plugins/hmm_lattice_plugin.zig`: optional BMES HMM CandidateProvider plugin source
 - `examples/`: language regression examples
 
 Set the runtime library path to `lib/` before running examples.
+If `lib/` contains `nexaloid_plugin_hmm_lattice.*`, load it with `data/hmm/bmes_hmm_wordhub_lattice.json` as the plugin config path.
+For score calibration, pass JSON such as `{{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.json","hmm_score":-14.0}}`.
 """,
     )
 
@@ -103,8 +133,11 @@ def package(version: str, platform: str, out_dir: Path, language: str) -> Path:
         write_package_readme(root, version, platform, language)
         copy_language_files(language, root)
         copy(ROOT / "data" / "dict" / "nexaloid.nxdict", root / "data" / "dict" / "nexaloid.nxdict")
+        copy_hmm(root)
         for lib in native_libs(platform):
             copy(lib, root / "lib" / lib.name)
+        for plugin in native_plugins(platform):
+            copy(plugin, root / "lib" / plugin.name)
 
         out = out_dir / f"{name}.zip"
         zip_dir(root, out)

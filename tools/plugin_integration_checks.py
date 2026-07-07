@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,14 @@ def plugin_name() -> str:
     return "nexaloid_plugin_demo_candidate.so"
 
 
+def hmm_plugin_name() -> str:
+    if sys.platform == "win32":
+        return "nexaloid_plugin_hmm_lattice.dll"
+    if sys.platform == "darwin":
+        return "nexaloid_plugin_hmm_lattice.dylib"
+    return "nexaloid_plugin_hmm_lattice.so"
+
+
 def build_plugin(out_path: Path) -> None:
     subprocess.run(
         [
@@ -46,9 +55,52 @@ def build_plugin(out_path: Path) -> None:
     )
 
 
+def build_hmm_plugin(out_path: Path) -> None:
+    subprocess.run(
+        [
+            "zig",
+            "build-lib",
+            "-dynamic",
+            "-lc",
+            f"-femit-bin={out_path}",
+            str(ROOT / "tools" / "hmm_lattice_plugin.zig"),
+        ],
+        check=True,
+    )
+
+
 def assert_plugin_tokenizer(tokenizer: Tokenizer) -> None:
     tokens = tokenizer.tokenize("火星基地")
     assert [(token.text, token.source) for token in tokens] == [("火星基地", "plugin")]
+
+
+def assert_hmm_plugin_tokenizer(plugin_path: Path) -> None:
+    artifact_path = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert "阿明" not in artifact["lexicon"]
+    assert "杭算" not in artifact["lexicon"]
+    tokenizer = Tokenizer(dict_path=plugin_path.parent / "missing.tsv")
+    try:
+        tokenizer.load_plugin(plugin_path, str(artifact_path))
+        assert [token.text for token in tokenizer.tokenize("小明硕士毕业")] == ["小明", "硕士", "毕业"]
+        assert [token.text for token in tokenizer.tokenize("阿明硕士毕业")] == ["阿明", "硕士", "毕业"]
+        assert [token.text for token in tokenizer.tokenize("服用二甲双胍500mg")] == ["服用", "二甲双胍", "500mg"]
+    finally:
+        tokenizer.close()
+
+    tokenizer = Tokenizer()
+    try:
+        tokenizer.load_plugin(plugin_path, str(artifact_path))
+        assert [token.text for token in tokenizer.tokenize("并参与杭算项目")] == ["并", "参与", "杭算", "项目"]
+    finally:
+        tokenizer.close()
+
+    tokenizer = Tokenizer()
+    try:
+        tokenizer.load_plugin(plugin_path, json.dumps({"artifact": str(artifact_path), "hmm_score": -20.0}))
+        assert [token.text for token in tokenizer.tokenize("并参与杭算项目")] == ["并", "参与", "杭", "算", "项目"]
+    finally:
+        tokenizer.close()
 
 
 def main() -> int:
@@ -76,6 +128,10 @@ def main() -> int:
             assert_plugin_tokenizer(tokenizer)
         finally:
             tokenizer.close()
+
+        hmm_plugin_path = tmp_path / hmm_plugin_name()
+        build_hmm_plugin(hmm_plugin_path)
+        assert_hmm_plugin_tokenizer(hmm_plugin_path)
 
     print("plugin integration checks passed")
     return 0

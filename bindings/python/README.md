@@ -33,8 +33,11 @@ tokenizer = Tokenizer(dict_path="data/dict/nexaloid.tsv")
 import nexaloid.compat_jieba as jieba
 
 print(jieba.lcut("我爱北京天安门"))
+print(jieba.lcut("小明硕士毕业", HMM=True))
 print(list(jieba.cut_for_search("中国科学院计算技术研究所")))
 ```
+
+`HMM=True` loads the bundled BMES HMM plugin and artifact to recover unknown words such as short names and domain terms.
 
 ## Development
 

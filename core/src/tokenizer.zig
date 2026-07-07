@@ -231,6 +231,18 @@ test "tokenizer keeps mixed ascii terms as one token" {
     try std.testing.expectEqual(@as(u32, 4), tokens.items[5].word_id);
 }
 
+test "tokenizer keeps market day term as one token" {
+    var tokenizer = try Tokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+
+    var tokens = try tokenizer.tokenize("T+3日内完成");
+    defer tokens.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(types.NxSource.rule, tokens.items[0].source);
+    try std.testing.expectEqual(@as(u32, 0), tokens.items[0].start_char);
+    try std.testing.expectEqual(@as(u32, 5), tokens.items[0].end_char);
+}
+
 test "search mode emits sub token ngrams" {
     var tokenizer = try Tokenizer.init(std.testing.allocator);
     defer tokenizer.deinit();
