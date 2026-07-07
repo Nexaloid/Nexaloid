@@ -55,6 +55,21 @@ def read_overlay(path: Path) -> list[tuple[str, float, str]]:
     return rows
 
 
+def read_demotions(path: Path) -> list[tuple[str, float]]:
+    if not path.exists():
+        return []
+    rows: list[tuple[str, float]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        rows.append((parts[0], float(parts[1])))
+    return rows
+
+
 def guess_pos(word: str) -> str:
     if any(ch.isascii() and ch.isalnum() for ch in word):
         return "nx"
@@ -69,6 +84,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--jieba-dict", type=Path)
     parser.add_argument("--overlay", type=Path, default=ROOT / "data" / "dict" / "overlay.tsv")
+    parser.add_argument("--demote", type=Path, default=ROOT / "data" / "dict" / "demote.tsv")
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "dict" / "nexaloid.tsv")
     args = parser.parse_args()
 
@@ -79,6 +95,9 @@ def main() -> int:
     merged: dict[str, tuple[float, str]] = {}
     for word, score, pos in read_jieba(jieba_dict):
         merged[word] = (score, pos)
+    for word, score in read_demotions(args.demote):
+        if word in merged:
+            merged[word] = (score, merged[word][1])
     for word, score, pos in read_overlay(args.overlay):
         merged[word] = (score, pos)
 

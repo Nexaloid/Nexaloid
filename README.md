@@ -180,6 +180,7 @@ Every token includes:
 ## Dictionary Management
 
 Build the base dictionary from jieba's `dict.txt` plus a custom overlay. The command auto-detects an installed `jieba` package; otherwise pass `--jieba-dict path\to\dict.txt`.
+`data/dict/demote.tsv` lowers scores for noisy base words before `overlay.tsv` applies manual boosts.
 
 ```powershell
 python tools/dict_builder.py --out data/dict/nexaloid.tsv
@@ -195,6 +196,13 @@ Validate the overlay dictionary:
 
 ```powershell
 python tools/validate_overlay.py data/dict/overlay.tsv
+```
+
+Import reviewed dictionary products from `NexaloidData` into generated base candidates. This does not modify the default dictionary. Raw domain dictionaries are skipped by default because they need separate review before use.
+
+```powershell
+python tools/import_nexaloid_data.py --data-root F:\Code\03_OpenCode\NexaloidData
+python tools/validate_overlay.py data/dict/generated/overlay.generated.tsv
 ```
 
 ## Development

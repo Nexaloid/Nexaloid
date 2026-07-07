@@ -11,6 +11,7 @@ bindings/python/src/nexaloid/native/
 bindings/rust/nexaloid-sys/native/
 bindings/rust/nexaloid-sys-*/native/
 bindings/rust/**/target/
+data/dict/generated/
 **/__pycache__/
 *.pyc
 *.pdb
