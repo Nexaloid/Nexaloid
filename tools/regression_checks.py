@@ -28,7 +28,7 @@ from nexaloid.tokenizer import NexaloidError  # noqa: E402
 from check_hmm_artifact import main as check_hmm_artifact_main  # noqa: E402
 from hmm_score_audit import main as hmm_score_audit_main  # noqa: E402
 from nxdict_builder import build as build_nxdict  # noqa: E402
-from plugin_integration_checks import main as plugin_integration_main  # noqa: E402
+from plugin_integration_checks import build_hmm_plugin, hmm_plugin_name, main as plugin_integration_main  # noqa: E402
 
 
 def expect_error(fn, text: str) -> None:
@@ -152,13 +152,22 @@ def check_bundled_hmm_artifact() -> None:
 
 
 def check_python_hmm_true_enabled() -> None:
-    tokenizer = Tokenizer()
-    try:
-        assert tokenizer.lcut("南京市长江大桥") == ["南京市", "长江大桥"]
-        assert tokenizer.lcut("小明硕士毕业", HMM=False) == ["小", "明", "硕士", "毕业"]
-        assert tokenizer.lcut("小明硕士毕业", HMM=True) == ["小明", "硕士", "毕业"]
-    finally:
-        tokenizer.close()
+    with tempfile.TemporaryDirectory() as tmp:
+        plugin_path = Path(tmp) / hmm_plugin_name()
+        build_hmm_plugin(plugin_path)
+        old_plugin = os.environ.get("NEXALOID_HMM_PLUGIN")
+        os.environ["NEXALOID_HMM_PLUGIN"] = str(plugin_path)
+        tokenizer = Tokenizer()
+        try:
+            assert tokenizer.lcut("南京市长江大桥") == ["南京市", "长江大桥"]
+            assert tokenizer.lcut("小明硕士毕业", HMM=False) == ["小", "明", "硕士", "毕业"]
+            assert tokenizer.lcut("小明硕士毕业", HMM=True) == ["小明", "硕士", "毕业"]
+        finally:
+            tokenizer.close()
+            if old_plugin is None:
+                os.environ.pop("NEXALOID_HMM_PLUGIN", None)
+            else:
+                os.environ["NEXALOID_HMM_PLUGIN"] = old_plugin
 
 
 def check_rust_sys_hmm_artifact_synced() -> None:
