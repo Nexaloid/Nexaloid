@@ -2,7 +2,7 @@
 
 This branch tracks the latest released Nexaloid ZIG entry files.
 
-Version: 0.1.18
+Version: 0.1.20
 
 ## Use
 

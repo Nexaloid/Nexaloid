@@ -39,6 +39,21 @@ typedef enum {
     NX_SOURCE_PLUGIN = 6
 } NxSource;
 
+/* Built-in rule ids for nx_set_rule_config. */
+typedef enum {
+    NX_RULE_URL = 0,
+    NX_RULE_EMAIL = 1,
+    NX_RULE_TIMESTAMP = 2,
+    NX_RULE_WINDOWS_PATH = 3,
+    NX_RULE_IPV6 = 4,
+    NX_RULE_NUMBER_UNIT = 5,
+    NX_RULE_MARKET_DAY = 6,
+    NX_RULE_ASCII_TERM = 7,
+    NX_RULE_COUNT = 8
+} NxRuleId;
+
+#define NX_RULE_ALL_MASK ((uint32_t)((1u << NX_RULE_COUNT) - 1u))
+
 /* Engine configuration. String pointers are owned by the caller and read during init only. */
 typedef struct {
     /* Main dictionary path. The current loader accepts UTF-8 TSV files. */
@@ -97,6 +112,29 @@ NxStatus nx_engine_new(const NxConfig *config, NxEngine **out_engine);
 
 /* Free an engine. NULL is allowed. */
 void nx_engine_free(NxEngine *engine);
+
+/* Configure built-in rule matcher behavior. enabled_mask uses 1u << NxRuleId.
+   scores may be NULL; otherwise score_count entries override default rule scores
+   in NxRuleId order. Existing defaults are 300 for structured rules and 3 for
+   NX_RULE_ASCII_TERM. */
+NxStatus nx_set_rule_config(
+    NxEngine *engine,
+    uint32_t enabled_mask,
+    const float *scores,
+    size_t score_count
+);
+
+/* Load custom structured rules from JSON. Parsing and validation are owned by
+   the core so every language binding has identical behavior. Supported v1
+   custom kinds are prefixed_number and charset_span. */
+NxStatus nx_load_rules_json(
+    NxEngine *engine,
+    const char *json,
+    size_t json_len
+);
+
+/* Remove custom rules loaded by nx_load_rules_json. Built-in rules remain. */
+NxStatus nx_clear_rules(NxEngine *engine);
 
 /* Load a CandidateProvider plugin dynamic library into an engine.
    config_json may be NULL. Loaded plugins are released by nx_engine_free. */
