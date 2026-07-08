@@ -129,8 +129,7 @@ jobs:
               .zig-cache/cpp-regression
               ;;
             zig)
-              zig build-exe bindings/zig/tests/regression.zig -Icore/include -Lcore/zig-out/lib -lnexaloid -lc
-              ./regression
+              (cd bindings/zig && zig build regression)
               ;;
           esac
 
