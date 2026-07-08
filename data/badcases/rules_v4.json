@@ -1,0 +1,32 @@
+[
+  {
+    "id": "stock_codes",
+    "text": "买入SH600519和SZ000001，关注HK0700走势",
+    "expect": ["SH600519", "SZ000001", "HK0700"]
+  },
+  {
+    "id": "sku_and_model",
+    "text": "订单包含SKU-AB12和A100-B2，模型使用gpt-4.1-mini",
+    "expect": ["SKU-AB12", "A100-B2", "gpt-4.1-mini"]
+  },
+  {
+    "id": "number_units",
+    "text": "患者HbA1c为7.2%，服用二甲双胍500mg，血糖6.5mmol/L",
+    "expect": ["7.2%", "500mg", "6.5mmol/L"]
+  },
+  {
+    "id": "legal_case_number",
+    "text": "案号为（2025）沪01民终1234号，后续补充材料",
+    "expect": ["（2025）沪01民终1234号"]
+  },
+  {
+    "id": "bracket_code",
+    "text": "任务编号[AB-1234]已经进入队列",
+    "expect": ["[AB-1234]"]
+  },
+  {
+    "id": "reject_short_code",
+    "text": "普通ABC和[AB]不应该被业务规则命中",
+    "reject": ["ABC", "[AB]"]
+  }
+]

@@ -11,6 +11,11 @@ typedef struct {
     int failed;
 } Ctx;
 
+typedef struct {
+    int saw_rule;
+    int saw_full_ascii;
+} RuleCtx;
+
 static void on_token(const NxToken *token, const char *text, size_t text_len, void *user_data) {
     (void)text_len;
     Ctx *ctx = (Ctx *)user_data;
@@ -22,6 +27,16 @@ static void on_token(const NxToken *token, const char *text, size_t text_len, vo
     const size_t len = token->end_byte - token->start_byte;
     if (strlen(expected) != len || memcmp(text + token->start_byte, expected, len) != 0) {
         ctx->failed = 1;
+    }
+}
+
+static void on_rule_check(const NxToken *token, const char *text, size_t text_len, void *user_data) {
+    (void)text_len;
+    RuleCtx *ctx = (RuleCtx *)user_data;
+    if (token->source == NX_SOURCE_RULE) ctx->saw_rule = 1;
+    const size_t len = token->end_byte - token->start_byte;
+    if (len == strlen("foo_bar-123") && memcmp(text + token->start_byte, "foo_bar-123", len) == 0) {
+        ctx->saw_full_ascii = 1;
     }
 }
 
@@ -48,6 +63,18 @@ int main(void) {
     expect(engine, "我爱北京天安门", entity, 4);
     const char *ambiguous[] = {"长春", "市长", "春节前", "发表", "讲话"};
     expect(engine, "长春市长春节前发表讲话", ambiguous, 5);
+
+    if (nx_set_rule_config(engine, NX_RULE_ALL_MASK & ~(1u << NX_RULE_ASCII_TERM), NULL, 0) != NX_OK) return 1;
+    RuleCtx rule_ctx = {0};
+    if (nx_tokenize(engine, "foo_bar-123", strlen("foo_bar-123"), NX_MODE_ACCURATE, on_rule_check, &rule_ctx) != NX_OK) return 1;
+    if (rule_ctx.saw_rule || rule_ctx.saw_full_ascii) return 1;
+
+    const char *rules_json = "{\"version\":1,\"rules\":[{\"name\":\"stock\",\"kind\":\"prefixed_number\",\"prefixes\":[\"SH\"],\"digits\":{\"min\":6,\"max\":6},\"score\":80}]}";
+    if (nx_load_rules_json(engine, rules_json, strlen(rules_json)) != NX_OK) return 1;
+    rule_ctx = (RuleCtx){0};
+    if (nx_tokenize(engine, "买SH600519", strlen("买SH600519"), NX_MODE_ACCURATE, on_rule_check, &rule_ctx) != NX_OK) return 1;
+    if (!rule_ctx.saw_rule) return 1;
+    if (nx_clear_rules(engine) != NX_OK) return 1;
 
     nx_engine_free(engine);
     puts("c regression passed");

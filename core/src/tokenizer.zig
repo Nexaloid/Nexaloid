@@ -3,6 +3,7 @@ const types = @import("types.zig");
 const scanner = @import("scanner/utf8.zig");
 const trie_mod = @import("lexicon/trie.zig");
 const lattice_mod = @import("lattice/lattice.zig");
+const rule_matcher = @import("matcher/rule_matcher.zig");
 const decoder = @import("decoder/viterbi.zig");
 
 pub const Tokenizer = struct {
@@ -11,6 +12,8 @@ pub const Tokenizer = struct {
     allocator: std.mem.Allocator,
     trie: trie_mod.TempTrie,
     user_trie: trie_mod.TempTrie,
+    rule_config: rule_matcher.RuleConfig = .{},
+    custom_rules: rule_matcher.CustomRules,
 
     pub fn init(allocator: std.mem.Allocator) !Tokenizer {
         var trie = try trie_mod.TempTrie.init(allocator);
@@ -19,10 +22,12 @@ pub const Tokenizer = struct {
             .allocator = allocator,
             .trie = trie,
             .user_trie = try trie_mod.TempTrie.init(allocator),
+            .custom_rules = rule_matcher.CustomRules.init(allocator),
         };
     }
 
     pub fn deinit(self: *Tokenizer) void {
+        self.custom_rules.deinit();
         self.user_trie.deinit();
         self.trie.deinit();
     }
@@ -33,6 +38,14 @@ pub const Tokenizer = struct {
 
     pub fn addWord(self: *Tokenizer, word: []const u8, word_id: u32, score: f32, pos_id: u16) !void {
         try self.user_trie.insert(word, word_id, score, pos_id);
+    }
+
+    pub fn loadRulesJson(self: *Tokenizer, json: []const u8) !void {
+        try self.custom_rules.loadJson(json);
+    }
+
+    pub fn clearRules(self: *Tokenizer) void {
+        self.custom_rules.clear();
     }
 
     pub fn isDictEmpty(self: *const Tokenizer) bool {
@@ -73,7 +86,7 @@ pub const Tokenizer = struct {
         }.emit);
 
         // Matcher output, rule terms, plugin candidates, and unknown fallback become one lattice.
-        var lattice = try lattice_mod.buildCandidates(self.allocator, scan_ctx.chars.items, &self.trie, &self.user_trie);
+        var lattice = try lattice_mod.buildCandidates(self.allocator, scan_ctx.chars.items, &self.trie, &self.user_trie, &self.rule_config, &self.custom_rules);
         defer lattice.deinit();
         try addCandidates(candidate_ctx, self.allocator, text, scan_ctx.chars.items, &lattice);
         try lattice_mod.addUnknownFallback(&lattice, scan_ctx.chars.items);
@@ -229,6 +242,64 @@ test "tokenizer keeps mixed ascii terms as one token" {
     try std.testing.expectEqual(@as(u32, 20), tokens.items[4].start_byte);
     try std.testing.expectEqual(@as(u32, 28), tokens.items[4].end_byte);
     try std.testing.expectEqual(@as(u32, 4), tokens.items[5].word_id);
+}
+
+test "tokenizer can disable ascii term rule" {
+    var tokenizer = try Tokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+    tokenizer.rule_config.enabled_mask &= ~rule_matcher.ruleBit(.ascii_term);
+
+    var tokens = try tokenizer.tokenize("foo_bar");
+    defer tokens.deinit(std.testing.allocator);
+
+    for (tokens.items) |token| {
+        try std.testing.expect(token.source != .rule);
+    }
+}
+
+test "tokenizer loads custom rules json" {
+    var tokenizer = try Tokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+    tokenizer.rule_config.enabled_mask = 0;
+    try tokenizer.loadRulesJson(
+        \\{"version":1,"rules":[
+        \\{"name":"stock","kind":"prefixed_number","prefixes":["S","SH","SZ"],"digits":{"min":6,"max":6},"score":80},
+        \\{"name":"sku","kind":"charset_span","charset":"A-Z0-9-_","min_len":4,"max_len":16,"score":60},
+        \\{"name":"model","kind":"ascii_chain","charset":"A-Za-z0-9.-","must_contain":["-","."],"min_len":4,"max_len":32,"score":80},
+        \\{"name":"dose","kind":"number_unit","units":["mg","%","mmol/L"],"score":90},
+        \\{"name":"case_no","kind":"literal_sequence","parts":[{"literal":"（"},{"digits":4},{"literal":"）沪"},{"digits":2},{"literal":"民终"},{"digits":{"min":1,"max":6}},{"literal":"号"}],"score":100},
+        \\{"name":"bracket_code","kind":"contains_span","left":"[","right":"]","charset":"A-Z0-9-","min_len":4,"max_len":16,"score":70}
+        \\]}
+    );
+
+    const text = "买SH600519和SKU-AB12，用gpt-4.1-mini，7.2%和500mg，案号（2025）沪01民终1234号，[AB-1234]";
+    var tokens = try tokenizer.tokenize(text);
+    defer tokens.deinit(std.testing.allocator);
+
+    var saw_stock = false;
+    var saw_sku = false;
+    var saw_model = false;
+    var saw_percent = false;
+    var saw_mg = false;
+    var saw_case = false;
+    var saw_bracket = false;
+    for (tokens.items) |token| {
+        const token_text = text[token.start_byte..token.end_byte];
+        if (std.mem.eql(u8, token_text, "SH600519") and token.source == .rule and token.flags == 1) saw_stock = true;
+        if (std.mem.eql(u8, token_text, "SKU-AB12") and token.source == .rule and token.flags == 2) saw_sku = true;
+        if (std.mem.eql(u8, token_text, "gpt-4.1-mini") and token.source == .rule and token.flags == 3) saw_model = true;
+        if (std.mem.eql(u8, token_text, "7.2%") and token.source == .rule and token.flags == 4) saw_percent = true;
+        if (std.mem.eql(u8, token_text, "500mg") and token.source == .rule and token.flags == 4) saw_mg = true;
+        if (std.mem.eql(u8, token_text, "（2025）沪01民终1234号") and token.source == .rule and token.flags == 5) saw_case = true;
+        if (std.mem.eql(u8, token_text, "[AB-1234]") and token.source == .rule and token.flags == 6) saw_bracket = true;
+    }
+    try std.testing.expect(saw_stock);
+    try std.testing.expect(saw_sku);
+    try std.testing.expect(saw_model);
+    try std.testing.expect(saw_percent);
+    try std.testing.expect(saw_mg);
+    try std.testing.expect(saw_case);
+    try std.testing.expect(saw_bracket);
 }
 
 test "tokenizer keeps market day term as one token" {

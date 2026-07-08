@@ -299,6 +299,43 @@ static napi_value tokenizer_load_plugin(napi_env env, napi_callback_info info) {
   return NULL;
 }
 
+static napi_value tokenizer_load_rules_json(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1];
+  napi_value self;
+  napi_get_cb_info(env, info, &argc, args, &self, NULL);
+
+  NodeTokenizer *tokenizer = NULL;
+  napi_unwrap(env, self, (void **)&tokenizer);
+  if (tokenizer == NULL || tokenizer->engine == NULL) {
+    napi_throw_error(env, NULL, "tokenizer is closed");
+    return NULL;
+  }
+
+  char *json = NULL;
+  size_t json_len = 0;
+  if (argc == 0 || !get_string_arg(env, args[0], &json, &json_len)) {
+    napi_throw_type_error(env, NULL, "json must be a string");
+    return NULL;
+  }
+
+  NxStatus status = nx_load_rules_json(tokenizer->engine, json, json_len);
+  free(json);
+  if (status != NX_OK) return throw_status(env, status);
+  return NULL;
+}
+
+static napi_value tokenizer_clear_rules(napi_env env, napi_callback_info info) {
+  NodeTokenizer *tokenizer = unwrap_tokenizer(env, info);
+  if (tokenizer == NULL || tokenizer->engine == NULL) {
+    napi_throw_error(env, NULL, "tokenizer is closed");
+    return NULL;
+  }
+  NxStatus status = nx_clear_rules(tokenizer->engine);
+  if (status != NX_OK) return throw_status(env, status);
+  return NULL;
+}
+
 static napi_value init(napi_env env, napi_value exports) {
   napi_property_descriptor methods[] = {
     {"tokenize", NULL, tokenizer_tokenize, NULL, NULL, NULL, napi_default, NULL},
@@ -306,11 +343,13 @@ static napi_value init(napi_env env, napi_value exports) {
     {"close", NULL, tokenizer_close, NULL, NULL, NULL, napi_default, NULL},
     {"addWord", NULL, tokenizer_add_word, NULL, NULL, NULL, napi_default, NULL},
     {"loadUserdict", NULL, tokenizer_load_userdict, NULL, NULL, NULL, napi_default, NULL},
-    {"loadPlugin", NULL, tokenizer_load_plugin, NULL, NULL, NULL, napi_default, NULL}
+    {"loadPlugin", NULL, tokenizer_load_plugin, NULL, NULL, NULL, napi_default, NULL},
+    {"loadRulesJson", NULL, tokenizer_load_rules_json, NULL, NULL, NULL, napi_default, NULL},
+    {"clearRules", NULL, tokenizer_clear_rules, NULL, NULL, NULL, napi_default, NULL}
   };
 
   napi_value ctor;
-  napi_define_class(env, "Tokenizer", NAPI_AUTO_LENGTH, tokenizer_new, NULL, 6, methods, &ctor);
+  napi_define_class(env, "Tokenizer", NAPI_AUTO_LENGTH, tokenizer_new, NULL, 8, methods, &ctor);
   napi_create_reference(env, ctor, 1, &tokenizer_ctor);
   napi_set_named_property(env, exports, "Tokenizer", ctor);
   return exports;

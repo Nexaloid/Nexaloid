@@ -95,6 +95,30 @@ func (t *Tokenizer) LoadPlugin(path string, configJSON string) error {
 	return nil
 }
 
+func (t *Tokenizer) LoadRulesJSON(jsonText string) error {
+	cJSON := C.CString(jsonText)
+	defer C.free(unsafe.Pointer(cJSON))
+	if status := C.nx_load_rules_json(t.engine, cJSON, C.size_t(len([]byte(jsonText)))); status != C.NX_OK {
+		return statusError(status)
+	}
+	return nil
+}
+
+func (t *Tokenizer) LoadRules(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return t.LoadRulesJSON(string(data))
+}
+
+func (t *Tokenizer) ClearRules() error {
+	if status := C.nx_clear_rules(t.engine); status != C.NX_OK {
+		return statusError(status)
+	}
+	return nil
+}
+
 func (t *Tokenizer) LoadPlugins(dir string, configJSON string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "stock",
+      "kind": "prefixed_number",
+      "prefixes": ["SH", "SZ", "HK"],
+      "digits": {"min": 4, "max": 6},
+      "score": 80
+    },
+    {
+      "name": "sku",
+      "kind": "charset_span",
+      "charset": "A-Z0-9-_",
+      "min_len": 4,
+      "max_len": 32,
+      "score": 60
+    },
+    {
+      "name": "model_name",
+      "kind": "ascii_chain",
+      "charset": "A-Za-z0-9.-",
+      "must_contain": ["-", "."],
+      "min_len": 4,
+      "max_len": 32,
+      "score": 80
+    },
+    {
+      "name": "dose",
+      "kind": "number_unit",
+      "units": ["mg", "%", "mmol/L", "GB", "TB"],
+      "score": 90
+    },
+    {
+      "name": "legal_case",
+      "kind": "literal_sequence",
+      "parts": [
+        {"literal": "（"},
+        {"digits": 4},
+        {"literal": "）沪"},
+        {"digits": 2},
+        {"literal": "民终"},
+        {"digits": {"min": 1, "max": 6}},
+        {"literal": "号"}
+      ],
+      "score": 100
+    },
+    {
+      "name": "bracket_code",
+      "kind": "contains_span",
+      "left": "[",
+      "right": "]",
+      "charset": "A-Z0-9-",
+      "min_len": 4,
+      "max_len": 16,
+      "score": 70
+    }
+  ]
+}

@@ -30,8 +30,8 @@ func TestRegressionCases(t *testing.T) {
 
 	cases := map[string][]string{
 		"我们在日本东京做RAG中文检索实验": {"我们", "在", "日本", "东京", "做", "RAG", "中文", "检索", "实验"},
-		"我爱北京天安门":      {"我", "爱", "北京", "天安门"},
-		"长春市长春节前发表讲话":  {"长春", "市长", "春节前", "发表", "讲话"},
+		"我爱北京天安门":           {"我", "爱", "北京", "天安门"},
+		"长春市长春节前发表讲话":       {"长春", "市长", "春节前", "发表", "讲话"},
 	}
 	for text, expected := range cases {
 		tokens, err := tokenizer.Tokenize(text, Accurate)
@@ -55,6 +55,28 @@ func TestRegressionCases(t *testing.T) {
 		if !contains(got, word) {
 			t.Fatalf("missing %q in %#v", word, got)
 		}
+	}
+}
+
+func TestCustomRules(t *testing.T) {
+	tokenizer, err := New("../../../data/dict/nexaloid.tsv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tokenizer.Close()
+
+	if err := tokenizer.LoadRulesJSON(`{"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]}`); err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := tokenizer.Tokenize("买SH600519", Accurate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(tokenTexts(tokens), "SH600519") {
+		t.Fatalf("missing custom rule token: %#v", tokens)
+	}
+	if err := tokenizer.ClearRules(); err != nil {
+		t.Fatal(err)
 	}
 }
 

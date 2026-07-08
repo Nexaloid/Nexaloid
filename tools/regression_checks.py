@@ -29,6 +29,7 @@ from check_hmm_artifact import main as check_hmm_artifact_main  # noqa: E402
 from hmm_score_audit import main as hmm_score_audit_main  # noqa: E402
 from nxdict_builder import build as build_nxdict  # noqa: E402
 from plugin_integration_checks import build_hmm_plugin, hmm_plugin_name, main as plugin_integration_main  # noqa: E402
+from rule_audit import main as rule_audit_main  # noqa: E402
 
 
 def expect_error(fn, text: str) -> None:
@@ -182,6 +183,36 @@ def check_traditional_mixed_text() -> None:
         tokenizer.close()
 
 
+def check_python_rule_config() -> None:
+    tokenizer = Tokenizer(
+        rule_config={
+            "ascii_term": False,
+            "custom_rules": [
+                {
+                    "name": "stock",
+                    "kind": "prefixed_number",
+                    "prefixes": ["SH"],
+                    "digits": {"min": 6, "max": 6},
+                    "score": 80,
+                }
+            ],
+        }
+    )
+    try:
+        tokens = tokenizer.tokenize("foo_bar-123")
+        assert all(token.source != "rule" for token in tokens)
+        assert "foo_bar-123" not in [token.text for token in tokens]
+        assert "SH600519" in tokenizer.lcut("买SH600519")
+        tokenizer.clear_rules()
+        assert "SH600519" not in tokenizer.lcut("买SH600519")
+        tokenizer.load_rules_json(
+            '{"version":1,"rules":[{"name":"sku","kind":"charset_span","charset":"A-Z0-9-_","min_len":4,"max_len":16,"score":60}]}'
+        )
+        assert "SKU-AB12" in tokenizer.lcut("买SKU-AB12")
+    finally:
+        tokenizer.close()
+
+
 def check_version_exported() -> None:
     import nexaloid
 
@@ -248,6 +279,10 @@ def check_hmm_score_audit() -> None:
     assert hmm_score_audit_main() == 0
 
 
+def check_rule_audit() -> None:
+    assert rule_audit_main() == 0
+
+
 def main() -> int:
     os.environ.setdefault("PYTHONUTF8", "1")
     checks = [
@@ -258,6 +293,7 @@ def main() -> int:
         check_del_word_base_falls_back,
         check_token_coverage,
         check_traditional_mixed_text,
+        check_python_rule_config,
         check_version_exported,
         check_repo_dict_preferred,
         check_python_hmm_artifact_path,
@@ -266,6 +302,7 @@ def main() -> int:
         check_rust_sys_hmm_artifact_synced,
         check_plugin_integration,
         check_hmm_score_audit,
+        check_rule_audit,
     ]
     failed = 0
     for check in checks:

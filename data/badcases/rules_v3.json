@@ -1,0 +1,22 @@
+[
+  {
+    "id": "stock_codes",
+    "text": "买入SH600519和SZ000001",
+    "expect": ["SH600519", "SZ000001"]
+  },
+  {
+    "id": "hk_stock",
+    "text": "关注HK0700走势",
+    "expect": ["HK0700"]
+  },
+  {
+    "id": "sku",
+    "text": "订单包含SKU-AB12和A100-B2",
+    "expect": ["SKU-AB12", "A100-B2"]
+  },
+  {
+    "id": "reject_short_code",
+    "text": "普通ABC不应该被SKU规则命中",
+    "reject": ["ABC"]
+  }
+]

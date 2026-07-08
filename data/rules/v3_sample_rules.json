@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "stock",
+      "kind": "prefixed_number",
+      "prefixes": ["SH", "SZ", "HK"],
+      "digits": {"min": 4, "max": 6},
+      "score": 80
+    },
+    {
+      "name": "sku",
+      "kind": "charset_span",
+      "charset": "A-Z0-9-_",
+      "min_len": 4,
+      "max_len": 32,
+      "score": 60
+    }
+  ]
+}

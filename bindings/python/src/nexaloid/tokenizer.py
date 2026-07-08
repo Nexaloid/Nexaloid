@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import math
 import os
 import sys
 from enum import IntEnum
@@ -68,6 +69,19 @@ _SOURCES = {
     5: "unknown",
     6: "plugin",
 }
+_RULE_NAMES = (
+    "url",
+    "email",
+    "timestamp",
+    "windows_path",
+    "ipv6",
+    "number_unit",
+    "market_day",
+    "ascii_term",
+)
+_RULE_INDEX = {name: index for index, name in enumerate(_RULE_NAMES)}
+_RULE_ALL_MASK = (1 << len(_RULE_NAMES)) - 1
+_RULE_DEFAULT_SCORES = [300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 3.0]
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _DICT_DIR = _PACKAGE_DIR / "data" / "dict"
@@ -187,6 +201,7 @@ def _append_deleted_fallback(out: list[Token], part: str, token: _NxToken) -> No
                 pos=None,
                 source="unknown",
                 score=-10.0,
+                flags=0,
             )
         )
         byte_offset += len(data)
@@ -218,6 +233,17 @@ _LIB.nx_engine_new.argtypes = [ctypes.POINTER(_NxConfig), ctypes.POINTER(ctypes.
 _LIB.nx_engine_new.restype = ctypes.c_int
 _LIB.nx_engine_free.argtypes = [ctypes.c_void_p]
 _LIB.nx_engine_free.restype = None
+_LIB.nx_set_rule_config.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_uint32,
+    ctypes.POINTER(ctypes.c_float),
+    ctypes.c_size_t,
+]
+_LIB.nx_set_rule_config.restype = ctypes.c_int
+_LIB.nx_load_rules_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t]
+_LIB.nx_load_rules_json.restype = ctypes.c_int
+_LIB.nx_clear_rules.argtypes = [ctypes.c_void_p]
+_LIB.nx_clear_rules.restype = ctypes.c_int
 _LIB.nx_load_plugin.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
 _LIB.nx_load_plugin.restype = ctypes.c_int
 _LIB.nx_tokenize.argtypes = [
@@ -259,6 +285,50 @@ class NexaloidError(RuntimeError):
     pass
 
 
+def _normalize_rule_config(rule_config: dict | None) -> tuple[int, list[float]] | None:
+    if rule_config is None:
+        return None
+    enabled_mask = _RULE_ALL_MASK
+    scores = list(_RULE_DEFAULT_SCORES)
+
+    def apply_rule(name: str, value) -> None:
+        nonlocal enabled_mask
+        if name not in _RULE_INDEX:
+            raise ValueError(f"unknown rule: {name}")
+        bit = 1 << _RULE_INDEX[name]
+        if isinstance(value, bool):
+            enabled_mask = enabled_mask | bit if value else enabled_mask & ~bit
+            return
+        if not isinstance(value, dict):
+            raise TypeError(f"rule config for {name} must be bool or dict")
+        if "enabled" in value:
+            enabled_mask = enabled_mask | bit if bool(value["enabled"]) else enabled_mask & ~bit
+        if "score" in value:
+            score = float(value["score"])
+            if not math.isfinite(score):
+                raise ValueError(f"rule score for {name} must be finite")
+            scores[_RULE_INDEX[name]] = score
+
+    for key, value in rule_config.items():
+        if key in ("custom_rules", "version"):
+            continue
+        if key == "builtin_rules":
+            for rule_name, rule_value in value.items():
+                apply_rule(rule_name, rule_value)
+        elif key == "scores":
+            for rule_name, score in value.items():
+                apply_rule(rule_name, {"score": score})
+        else:
+            apply_rule(key, value)
+    return enabled_mask, scores
+
+
+def _custom_rules_json(rule_config: dict | None) -> str | None:
+    if not rule_config or "custom_rules" not in rule_config:
+        return None
+    return json.dumps({"version": rule_config.get("version", 1), "rules": rule_config["custom_rules"]}, ensure_ascii=False)
+
+
 class Tokenizer:
     def __init__(
         self,
@@ -267,11 +337,14 @@ class Tokenizer:
         domain: str | None = None,
         plugin_dir: str | os.PathLike[str] | None = None,
         plugin_config_json: str | None = None,
+        rule_config: dict | None = None,
     ):
         resolved_dict = _resolve_dict_path(dict_path)
         resolved_domain_dict = _resolve_domain_dict_path(domain)
         self._dict_path = resolved_dict if resolved_dict.exists() else None
         self._user_dict_path = resolved_domain_dict
+        self._rule_config = _normalize_rule_config(rule_config)
+        self._rules_json = _custom_rules_json(rule_config)
         self._engine = self._open_engine()
         self._hmm_engine: ctypes.c_void_p | None = None
         self._hmm_plugin_path: Path | None = None
@@ -295,7 +368,22 @@ class Tokenizer:
         if resolved_user_dict is not None:
             config.user_dict_path = str(resolved_user_dict).encode("utf-8")
         self._check(_LIB.nx_engine_new(ctypes.byref(config), ctypes.byref(engine)))
+        self._apply_rule_config(engine)
+        self._apply_custom_rules(engine)
         return engine
+
+    def _apply_rule_config(self, engine: ctypes.c_void_p) -> None:
+        if self._rule_config is None:
+            return
+        enabled_mask, scores = self._rule_config
+        score_array = (ctypes.c_float * len(scores))(*scores)
+        self._check(_LIB.nx_set_rule_config(engine, enabled_mask, score_array, len(scores)))
+
+    def _apply_custom_rules(self, engine: ctypes.c_void_p) -> None:
+        if self._rules_json is None:
+            return
+        data = self._rules_json.encode("utf-8")
+        self._check(_LIB.nx_load_rules_json(engine, data, len(data)))
 
     def close(self) -> None:
         if not self._closed:
@@ -354,6 +442,26 @@ class Tokenizer:
         for plugin_path in _iter_plugin_paths(path):
             self.load_plugin(plugin_path, config_json)
 
+    def load_rules_json(self, json_text: str) -> None:
+        self._ensure_open()
+        data = json_text.encode("utf-8")
+        self._check(_LIB.nx_load_rules_json(self._engine, data, len(data)))
+        if self._hmm_engine is not None:
+            self._check(_LIB.nx_load_rules_json(self._hmm_engine, data, len(data)))
+        self._rules_json = json_text
+        self._hmm_search_cache.clear()
+
+    def load_rules(self, path: str | os.PathLike[str]) -> None:
+        self.load_rules_json(Path(path).read_text(encoding="utf-8"))
+
+    def clear_rules(self) -> None:
+        self._ensure_open()
+        self._check(_LIB.nx_clear_rules(self._engine))
+        if self._hmm_engine is not None:
+            self._check(_LIB.nx_clear_rules(self._hmm_engine))
+        self._rules_json = None
+        self._hmm_search_cache.clear()
+
     def suggest_freq(self, segment, tune: bool = False):
         word = "".join(segment) if isinstance(segment, tuple) else str(segment)
         if tune:
@@ -383,6 +491,7 @@ class Tokenizer:
                     pos=None,
                     source=_SOURCES.get(token.source, "unknown"),
                     score=float(token.score),
+                    flags=int(token.flags),
                 )
             )
 
@@ -424,6 +533,7 @@ class Tokenizer:
                     pos=None,
                     source=_SOURCES.get(token.source, "unknown"),
                     score=float(token.score),
+                    flags=int(token.flags),
                 )
             )
 

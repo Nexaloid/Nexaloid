@@ -140,6 +140,24 @@ impl Tokenizer {
         Ok(())
     }
 
+    pub fn load_rules_json(&mut self, json: &str) -> Result<(), Error> {
+        check(unsafe {
+            sys::nx_load_rules_json(self.engine, json.as_ptr() as *const c_char, json.len())
+        })
+    }
+
+    pub fn load_rules<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+        let json = std::fs::read_to_string(path).map_err(|err| Error {
+            status: sys::NxStatus::Io,
+            message: err.to_string(),
+        })?;
+        self.load_rules_json(&json)
+    }
+
+    pub fn clear_rules(&mut self) -> Result<(), Error> {
+        check(unsafe { sys::nx_clear_rules(self.engine) })
+    }
+
     pub fn tokenize(&self, text: &str, mode: Mode) -> Result<Vec<Token>, Error> {
         let mut out = Vec::new();
         let mut ctx = CallbackCtx {
@@ -231,13 +249,12 @@ mod tests {
     fn regression_cases() {
         let tokenizer = Tokenizer::new_default().unwrap();
         let cases = [
-            (
-                "南京市长江大桥",
-                vec!["南京市", "长江大桥"],
-            ),
+            ("南京市长江大桥", vec!["南京市", "长江大桥"]),
             (
                 "我们在日本东京做RAG中文检索实验",
-                vec!["我们", "在", "日本", "东京", "做", "RAG", "中文", "检索", "实验"],
+                vec![
+                    "我们", "在", "日本", "东京", "做", "RAG", "中文", "检索", "实验",
+                ],
             ),
             ("我爱北京天安门", vec!["我", "爱", "北京", "天安门"]),
             (
@@ -246,15 +263,44 @@ mod tests {
             ),
         ];
         for (text, expected) in cases {
-            assert_eq!(texts(tokenizer.tokenize(text, Mode::Accurate).unwrap()), expected);
+            assert_eq!(
+                texts(tokenizer.tokenize(text, Mode::Accurate).unwrap()),
+                expected
+            );
         }
 
-        let search = texts(tokenizer.tokenize("ChatGPT-5.5支持中文RAG检索。", Mode::Search).unwrap());
+        let search = texts(
+            tokenizer
+                .tokenize("ChatGPT-5.5支持中文RAG检索。", Mode::Search)
+                .unwrap(),
+        );
         for word in ["ChatGPT-5.5", "中文", "RAG", "检索"] {
-            assert!(search.iter().any(|item| item == word), "missing {word}: {search:?}");
+            assert!(
+                search.iter().any(|item| item == word),
+                "missing {word}: {search:?}"
+            );
         }
         for word in ["Ch", "Cha", "ha"] {
-            assert!(!search.iter().any(|item| item == word), "unexpected {word}: {search:?}");
+            assert!(
+                !search.iter().any(|item| item == word),
+                "unexpected {word}: {search:?}"
+            );
         }
+    }
+
+    #[test]
+    fn custom_rules() {
+        let mut tokenizer = Tokenizer::new_default().unwrap();
+        tokenizer
+            .load_rules_json(
+                r#"{"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]}"#,
+            )
+            .unwrap();
+        assert!(
+            texts(tokenizer.tokenize("买SH600519", Mode::Accurate).unwrap())
+                .iter()
+                .any(|item| item == "SH600519")
+        );
+        tokenizer.clear_rules().unwrap();
     }
 }

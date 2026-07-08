@@ -104,6 +104,92 @@ let tokens = tokenizer.tokenize("南京市长江大桥", Mode::Accurate)?;
 | **Search** | Emits explicit non-unknown candidates + 2-gram / 3-gram expansions for recall |
 | **Full** | Reserved for API compatibility; behaves like Accurate in v0.1 |
 
+## Built-in Rule Configuration
+
+The rule matcher protects structured tokens such as URLs, email addresses, ISO timestamps, Windows paths, IPv6 addresses, number+unit spans, market-day terms like `T+3日`, and mixed ASCII terms such as `GPT-5.5`.
+
+Rules are enabled by default. Python can disable a built-in rule or override scores:
+
+```python
+from nexaloid import Tokenizer
+
+tokenizer = Tokenizer(rule_config={
+    "ascii_term": False,
+    "scores": {
+        "url": 120.0,
+        "email": 120.0,
+    },
+})
+```
+
+Supported rule names are:
+
+```text
+url, email, timestamp, windows_path, ipv6, number_unit, market_day, ascii_term
+```
+
+Default scores are `300.0` for structured rules and `3.0` for `ascii_term`. Lower a score when the rule should lose more often to dictionary candidates; disable a rule when that token shape is noise for your domain.
+
+Custom rules are loaded as JSON and parsed by the Zig core, not by language bindings. V4 supports six structured rule kinds:
+
+```text
+prefixed_number, charset_span, ascii_chain, number_unit, literal_sequence, contains_span
+```
+
+Common fields are `name`, `kind`, `score`, `enabled`, and `boundary`. `boundary` accepts `none`, `ascii`, or `ascii_or_han`.
+
+```json
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "stock",
+      "kind": "prefixed_number",
+      "prefixes": ["SH", "SZ", "HK"],
+      "digits": {"min": 4, "max": 6},
+      "score": 80
+    },
+    {
+      "name": "sku",
+      "kind": "charset_span",
+      "charset": "A-Z0-9-_",
+      "min_len": 4,
+      "max_len": 32,
+      "score": 60
+    },
+    {
+      "name": "model_name",
+      "kind": "ascii_chain",
+      "charset": "A-Za-z0-9.-",
+      "must_contain": ["-", "."],
+      "min_len": 4,
+      "max_len": 32,
+      "score": 80
+    },
+    {
+      "name": "dose",
+      "kind": "number_unit",
+      "units": ["mg", "%", "mmol/L"],
+      "score": 90
+    }
+  ]
+}
+```
+
+```python
+tokenizer.load_rules_json(rules_json)
+tokenizer.load_rules("rules.json")
+tokenizer.clear_rules()
+```
+
+Node.js, C++, Go, and Rust expose the same `loadRulesJson` / `load_rules_json` / `LoadRulesJSON` style wrappers; C users call `nx_load_rules_json` directly. All wrappers pass JSON through to core so matching behavior stays identical across languages.
+
+Audit custom rules against expected and rejected tokens:
+
+```powershell
+python tools/rule_audit.py data/rules/v4_sample_rules.json data/badcases/rules_v4.json
+```
+
 ## Architecture
 
 ```
@@ -195,9 +281,16 @@ NxStatus  nx_tokenize_batch(NxEngine *engine, const char *const *texts,
 NxStatus  nx_add_word(NxEngine *engine, const char *word, size_t word_len,
                       uint32_t word_id, float score, uint16_t pos_id);
 NxStatus  nx_reload_user_dict(NxEngine *engine, const char *user_dict_path);
+NxStatus  nx_set_rule_config(NxEngine *engine, uint32_t enabled_mask,
+                             const float *scores, size_t score_count);
+NxStatus  nx_load_rules_json(NxEngine *engine, const char *json,
+                             size_t json_len);
+NxStatus  nx_clear_rules(NxEngine *engine);
 NxStatus  nx_load_plugin(NxEngine *engine, const char *plugin_path,
                          const char *config_json);
 ```
+
+`enabled_mask` uses `1u << NxRuleId`; pass `NX_RULE_ALL_MASK` for defaults. `scores` may be `NULL`, or an array in `NxRuleId` order.
 
 Headers: `core/include/nexaloid.h`, `core/include/nexaloid_plugin.h`
 
@@ -213,6 +306,7 @@ Every token includes:
 | `word_id` | Dictionary word ID (0 for unknown / rule tokens) |
 | `pos_id` | POS tag ID (reserved, unresolved in v0.1) |
 | `source` | Origin: `base_dict`, `user_dict`, `rule`, `unknown`, or `plugin`; `domain_dict` is reserved |
+| `flags` | Extra metadata; custom rule tokens use a 1-based rule index for audit tooling |
 | `score` | Decoder score (higher is better; log-probability for dict tokens) |
 
 ## Dictionary Management

@@ -25,6 +25,9 @@ assertWords("我们在日本东京做RAG中文检索实验", ["我们", "在", "
 assertWords("我爱北京天安门", ["我", "爱", "北京", "天安门"]);
 assertWords("长春市长春节前发表讲话", ["长春", "市长", "春节前", "发表", "讲话"]);
 assertSearch("ChatGPT-5.5支持中文RAG检索。", ["ChatGPT-5.5", "中文", "RAG", "检索"], ["Ch", "Cha", "ha"]);
+tokenizer.loadRulesJson('{"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]}');
+if (!tokenizer.lcut("买SH600519").includes("SH600519")) throw new Error("missing custom rule token");
+tokenizer.clearRules();
 if (!fs.existsSync(hmmArtifactPath)) throw new Error(`missing HMM artifact: ${hmmArtifactPath}`);
 if (!fs.existsSync(hmmManifestPath)) throw new Error(`missing HMM manifest: ${hmmManifestPath}`);
 if (hmmManifest().quality.lattice_heldout.token_f1 < 0.98) throw new Error("bad HMM manifest quality");

@@ -55,7 +55,8 @@ pub fn buildFromMatcher(
     trie: *const trie_mod.TempTrie,
     user_trie: *const trie_mod.TempTrie,
 ) !Lattice {
-    var lattice = try buildCandidates(allocator, chars, trie, user_trie);
+    const rule_config = rule_matcher.RuleConfig{};
+    var lattice = try buildCandidates(allocator, chars, trie, user_trie, &rule_config, null);
     errdefer lattice.deinit();
     try addUnknownFallback(&lattice, chars);
     return lattice;
@@ -66,6 +67,8 @@ pub fn buildCandidates(
     chars: []const types.NxChar,
     trie: *const trie_mod.TempTrie,
     user_trie: *const trie_mod.TempTrie,
+    rule_config: *const rule_matcher.RuleConfig,
+    custom_rules: ?*const rule_matcher.CustomRules,
 ) !Lattice {
     var lattice = Lattice.init(allocator, @intCast(chars.len));
     errdefer lattice.deinit();
@@ -98,7 +101,7 @@ pub fn buildCandidates(
             try out.addEdge(edge);
         }
     }.emit);
-    try rule_matcher.matchAll(chars, &lattice, struct {
+    try rule_matcher.matchAllConfigCustom(chars, rule_config, custom_rules, &lattice, struct {
         fn emit(out: *Lattice, edge: types.NxEdge) !void {
             try out.addEdge(edge);
         }
@@ -234,7 +237,8 @@ test "user tombstone does not suppress base edge with same span" {
         }
     }.emit);
 
-    var lattice = try buildCandidates(std.testing.allocator, char_ctx.chars[0..char_ctx.count], &trie, &user_trie);
+    const rule_config = rule_matcher.RuleConfig{};
+    var lattice = try buildCandidates(std.testing.allocator, char_ctx.chars[0..char_ctx.count], &trie, &user_trie, &rule_config, null);
     defer lattice.deinit();
 
     try std.testing.expectEqual(@as(usize, 1), lattice.edgeCount());

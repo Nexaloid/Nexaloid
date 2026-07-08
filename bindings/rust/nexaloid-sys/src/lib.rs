@@ -93,6 +93,18 @@ extern "C" {
     // Raw C ABI declarations. Higher-level crates should use nexaloid instead of calling these directly.
     pub fn nx_engine_new(config: *const NxConfig, out_engine: *mut *mut NxEngine) -> NxStatus;
     pub fn nx_engine_free(engine: *mut NxEngine);
+    pub fn nx_set_rule_config(
+        engine: *mut NxEngine,
+        enabled_mask: u32,
+        scores: *const f32,
+        score_count: usize,
+    ) -> NxStatus;
+    pub fn nx_load_rules_json(
+        engine: *mut NxEngine,
+        json: *const c_char,
+        json_len: usize,
+    ) -> NxStatus;
+    pub fn nx_clear_rules(engine: *mut NxEngine) -> NxStatus;
     pub fn nx_tokenize(
         engine: *mut NxEngine,
         text: *const c_char,

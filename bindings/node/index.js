@@ -50,6 +50,10 @@ class Tokenizer extends native.Tokenizer {
       }
     }
   }
+
+  loadRules(file) {
+    this.loadRulesJson(fs.readFileSync(file, "utf8"));
+  }
 }
 
 module.exports = {

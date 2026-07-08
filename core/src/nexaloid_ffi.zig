@@ -9,6 +9,7 @@ const c = if (builtin.os.tag == .windows) @cImport({
     @cInclude("string.h");
 });
 const tokenizer_mod = @import("tokenizer.zig");
+const rule_matcher = @import("matcher/rule_matcher.zig");
 const plugin_mod = @import("plugin/loader.zig");
 const scanner = @import("scanner/utf8.zig");
 const types = @import("types.zig");
@@ -111,6 +112,44 @@ export fn nx_load_plugin(
         owned.close();
         return statusFromError(err);
     };
+    return .ok;
+}
+
+export fn nx_set_rule_config(
+    engine: ?*NxEngine,
+    enabled_mask: u32,
+    scores: ?[*]const f32,
+    score_count: usize,
+) callconv(.c) NxStatus {
+    const ptr = engine orelse return .invalid_config;
+    var config = rule_matcher.RuleConfig{
+        .enabled_mask = enabled_mask & rule_matcher.all_rules_mask,
+    };
+    if (scores) |items| {
+        const count = @min(score_count, rule_matcher.rule_count);
+        for (0..count) |i| {
+            if (!std.math.isFinite(items[i])) return .invalid_config;
+            config.scores[i] = items[i];
+        }
+    }
+    ptr.tokenizer.rule_config = config;
+    return .ok;
+}
+
+export fn nx_load_rules_json(
+    engine: ?*NxEngine,
+    json: ?[*]const u8,
+    json_len: usize,
+) callconv(.c) NxStatus {
+    const ptr = engine orelse return .invalid_config;
+    const bytes = (json orelse return .invalid_config)[0..json_len];
+    ptr.tokenizer.loadRulesJson(bytes) catch |err| return statusFromError(err);
+    return .ok;
+}
+
+export fn nx_clear_rules(engine: ?*NxEngine) callconv(.c) NxStatus {
+    const ptr = engine orelse return .invalid_config;
+    ptr.tokenizer.clearRules();
     return .ok;
 }
 
@@ -229,6 +268,7 @@ fn statusFromError(err: anyerror) NxStatus {
     return switch (err) {
         error.InvalidUtf8 => .invalid_utf8,
         error.OutOfMemory => .out_of_memory,
+        error.InvalidRules => .invalid_config,
         error.Plugin,
         error.PluginOpenFailed,
         error.PluginSymbolMissing,

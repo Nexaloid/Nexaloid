@@ -12,3 +12,4 @@ class Token:
     pos: Optional[str]
     source: str
     score: float
+    flags: int = 0
