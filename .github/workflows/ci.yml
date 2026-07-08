@@ -5,14 +5,18 @@ on:
   pull_request:
     paths-ignore:
       - "README.md"
-      - "README.zh-CN.md"
+      - "README.*.md"
+      - "**/README.md"
+      - "**/README.*.md"
       - "docs/**"
   push:
     branches:
       - main
     paths-ignore:
       - "README.md"
-      - "README.zh-CN.md"
+      - "README.*.md"
+      - "**/README.md"
+      - "**/README.*.md"
       - "docs/**"
 
 permissions:
