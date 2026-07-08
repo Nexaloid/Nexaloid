@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -84,6 +86,29 @@ public:
 
     void load_plugin(const char* path, const char* config_json = nullptr) {
         NxStatus status = nx_load_plugin(engine_, path, config_json);
+        if (status != NX_OK) {
+            throw Error(status);
+        }
+    }
+
+    void load_rules_json(std::string_view json) {
+        NxStatus status = nx_load_rules_json(engine_, json.data(), json.size());
+        if (status != NX_OK) {
+            throw Error(status);
+        }
+    }
+
+    void load_rules(const char* path) {
+        std::ifstream file(path);
+        if (!file) {
+            throw std::runtime_error("failed to open rules file");
+        }
+        std::string json((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        load_rules_json(json);
+    }
+
+    void clear_rules() {
+        NxStatus status = nx_clear_rules(engine_);
         if (status != NX_OK) {
             throw Error(status);
         }

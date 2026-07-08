@@ -33,6 +33,19 @@ int main() {
     if (!saw_ascii) {
         throw std::runtime_error("missing ascii search token");
     }
+
+    tokenizer.load_rules_json(R"({"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]})");
+    bool saw_stock = false;
+    for (const auto& token : tokenizer.tokenize("买SH600519")) {
+        if (token.text == "SH600519" && token.source == NX_SOURCE_RULE) {
+            saw_stock = true;
+        }
+    }
+    if (!saw_stock) {
+        throw std::runtime_error("missing custom rule token");
+    }
+    tokenizer.clear_rules();
+
     std::cout << "cpp regression passed\n";
     return 0;
 }
