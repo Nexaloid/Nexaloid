@@ -21,8 +21,11 @@ runs:
         esac
         version="${{ inputs.version }}"
         dir="$RUNNER_TEMP/zig-$version"
+        archive="$RUNNER_TEMP/zig-$target-$version.tar.xz"
         mkdir -p "$dir"
-        curl -fsSL "https://ziglang.org/download/$version/zig-$target-$version.tar.xz" | tar -xJ --strip-components=1 -C "$dir"
+        curl --fail --location --show-error --retry 5 --retry-delay 2 --retry-all-errors \
+          --output "$archive" "https://ziglang.org/download/$version/zig-$target-$version.tar.xz"
+        tar -xJf "$archive" --strip-components=1 -C "$dir"
         echo "$dir" >> "$GITHUB_PATH"
     - name: Install Zig
       if: runner.os == 'Windows'

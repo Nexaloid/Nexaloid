@@ -68,9 +68,11 @@ jobs:
           - os: ubuntu-latest
             platform: linux-x64
             pyplat: ""
+            zig_target: x86_64-linux-gnu
           - os: ubuntu-24.04-arm
             platform: linux-arm64
             pyplat: ""
+            zig_target: aarch64-linux-gnu
           - os: windows-latest
             platform: windows-x64
             pyplat: win_amd64
@@ -95,6 +97,11 @@ jobs:
         with:
           version: 0.16.0
       - name: Build native library
+        if: runner.os == 'Linux'
+        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target.zig_target }}
+        working-directory: ${{ github.workspace }}/core
+      - name: Build native library
+        if: runner.os != 'Linux'
         run: zig build -Doptimize=ReleaseFast
         working-directory: ${{ github.workspace }}/core
       - name: Install Python build tools
@@ -481,6 +488,11 @@ jobs:
         with:
           version: 0.16.0
       - name: Build native library
+        if: runner.os == 'Linux'
+        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target.zig_target }}
+        working-directory: ${{ github.workspace }}/core
+      - name: Build native library
+        if: runner.os != 'Linux'
         run: zig build -Doptimize=ReleaseFast
         working-directory: ${{ github.workspace }}/core
       - name: Build Node.js addon
