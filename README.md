@@ -1,6 +1,6 @@
 # Nexaloid
 
-Nexaloid is a Chinese tokenizer runtime, built in Zig with a stable C ABI and bindings for Python, Node.js, C++, Go, and Rust.
+Nexaloid is a Chinese tokenizer runtime, built in Zig with a stable C ABI and bindings for Python, Node.js, C++, Zig, Go, and Rust.
 
 It is aimed at workloads where correctness, throughput, and cross-language consistency matter: search engines, RAG pipelines, e-commerce catalogs, and text analytics.
 
@@ -182,7 +182,7 @@ tokenizer.load_rules("rules.json")
 tokenizer.clear_rules()
 ```
 
-Node.js, C++, Go, and Rust expose the same `loadRulesJson` / `load_rules_json` / `LoadRulesJSON` style wrappers; C users call `nx_load_rules_json` directly. All wrappers pass JSON through to core so matching behavior stays identical across languages.
+Node.js, C++, Zig, Go, and Rust expose the same `loadRulesJson` / `load_rules_json` / `LoadRulesJSON` style wrappers; C users call `nx_load_rules_json` directly. All wrappers pass JSON through to core so matching behavior stays identical across languages.
 
 Audit custom rules against expected and rejected tokens:
 
@@ -372,6 +372,7 @@ python tools\benchmark.py -n 1000
 | Python | `bindings/python/` | jieba-compatible API, batch support |
 | Node.js | `bindings/node/` | N-API native addon |
 | C++ | `bindings/cpp/` | RAII wrapper, header-only |
+| Zig | `bindings/zig/` | SDK wrapper over the C ABI |
 | Go | `bindings/go/` | cgo binding |
 | Rust | `bindings/rust/` | safe wrapper + `-sys` crate |
 
