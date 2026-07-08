@@ -2,6 +2,10 @@
 
 All language bindings call the nexaloid C ABI. They must not reimplement tokenizer logic.
 
+Modes are shared across bindings: `Accurate`, `Full`, `Search`, and `RecallSearch`.
+`Search` expands only the best Viterbi path to avoid cross-boundary semantic noise; `RecallSearch` keeps the older aggressive all-candidate expansion for recall-heavy indexes.
+Whitespace tokens are filtered by default. Enable the binding's `preserveWhitespace` / `preserve_whitespace` option, or set `NxConfig.preserve_whitespace = 1`, when exact source-shape retention is required.
+
 Release assets publish C, C++, and Zig as separate native SDK zip files, alongside the combined native SDK. The `release/c`, `release/cpp`, and `release/zig` branches track the latest released entry files for users who prefer pulling a branch.
 
 ## C++

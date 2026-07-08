@@ -7,7 +7,7 @@ It is aimed at workloads where correctness, throughput, and cross-language consi
 ## What Nexaloid Is
 
 - A dictionary-driven Chinese segmentation engine (double-array trie + Viterbi decoder)
-- A search tokenizer that emits dictionary candidates plus 2-gram / 3-gram expansions for recall
+- A conservative search tokenizer that expands the best path, plus an explicit recall-search mode for aggressive candidate expansion
 - An **explainable** tokenizer: every token carries its origin (base dict, user dict, rule, or unknown fallback) and a score
 - A runtime plugin ABI for optional CandidateProvider integrations; the core still runs without plugins
 - Byte- and character-offset-preserving token output through the C ABI and language bindings
@@ -48,7 +48,7 @@ import nexaloid.compat_jieba as jieba
 
 The adapter exports a module-level tokenizer, like jieba's global API. Current compatible names are `cut`, `lcut`, `cut_for_search`, `lcut_for_search`, `load_userdict`, `add_word`, `del_word`, and `suggest_freq`.
 
-`cut` returns an iterator of strings, `lcut` returns a list, and search mode de-duplicates multi-character search tokens. `load_userdict` accepts jieba-style `word freq tag` text dictionaries; tags, `HMM`, and `use_paddle` are accepted for API shape but ignored by the current adapter. Use `nexaloid.Tokenizer` directly when you need offsets, token source, scores, or batch tokenization. See [docs/jieba_compat.md](docs/jieba_compat.md) for the compatibility boundary.
+`cut` returns an iterator of strings, `lcut` returns a list, and search mode de-duplicates multi-character search tokens. `cut_for_search` uses conservative `Search` mode, which avoids cross-boundary candidates such as `市长` in `南京市长江大桥`; use native `Mode.RECALL_SEARCH` when you want the older aggressive recall expansion. `load_userdict` accepts jieba-style `word freq tag` text dictionaries; tags, `HMM`, and `use_paddle` are accepted for API shape but ignored by the current adapter. Use `nexaloid.Tokenizer` directly when you need offsets, token source, scores, or batch tokenization.
 
 ### Node.js
 
@@ -100,9 +100,22 @@ let tokens = tokenizer.tokenize("南京市长江大桥", Mode::Accurate)?;
 
 | Mode | Behavior |
 |------|----------|
-| **Accurate** | Viterbi shortest-path decoding; filters pure whitespace tokens |
-| **Search** | Emits explicit non-unknown candidates + 2-gram / 3-gram expansions for recall |
+| **Accurate** | Viterbi shortest-path decoding; filters pure whitespace tokens unless `preserve_whitespace` is enabled |
+| **Search** | Emits best-path tokens plus Han 2-gram / 3-gram expansions; avoids cross-boundary semantic noise |
+| **RecallSearch** | Emits all explicit non-unknown candidate edges plus Han 2-gram / 3-gram expansions for maximum recall |
 | **Full** | Reserved for API compatibility; behaves like Accurate in v0.1 |
+
+## Whitespace
+
+Nexaloid filters pure whitespace tokens by default, which is usually better for search and RAG pipelines. Enable whitespace preservation when you need jieba-like source-shape retention:
+
+```python
+tokenizer = Tokenizer(preserve_whitespace=True)
+print(tokenizer.lcut("中文 English\t混排\n第二行"))
+# ['中文', ' ', 'English', '\t', '混排', '\n', '第二行']
+```
+
+The same switch is exposed through `NxConfig.preserve_whitespace` in the C ABI and through each language binding's constructor/options wrapper.
 
 ## Built-in Rule Configuration
 
@@ -204,6 +217,18 @@ UTF-8 text
 ```
 
 The core is a single Zig library (`libnexaloid`). Language bindings call the C ABI and do not reimplement tokenizer logic. Runtime loading is implemented for CandidateProvider plugins; other plugin hook kinds are reserved.
+
+Matcher code is split by responsibility:
+
+| File | Responsibility |
+|------|----------------|
+| `core/src/matcher/rule_matcher.zig` | Public rule matcher facade and built-in/custom rule orchestration |
+| `core/src/matcher/rule_config.zig` | Rule IDs, score defaults, and enabled-rule masks |
+| `core/src/matcher/builtin_rules.zig` | Built-in structured token rules such as URL, email, IPv6, timestamp, and ASCII terms |
+| `core/src/matcher/custom_rules.zig` | Public custom-rule facade |
+| `core/src/matcher/custom_rule_types.zig` | Shared custom-rule structs and limits |
+| `core/src/matcher/custom_rule_parser.zig` | JSON parsing for custom rules |
+| `core/src/matcher/custom_rule_matcher.zig` | Runtime matching for parsed custom rules |
 
 ## Features
 

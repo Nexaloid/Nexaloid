@@ -33,6 +33,8 @@ use nexaloid::{Mode, Tokenizer};
 fn main() -> Result<(), nexaloid::Error> {
     let tokenizer = Tokenizer::new_default()?;
     let tokens = tokenizer.tokenize("南京市长江大桥", Mode::Accurate)?;
+    let search = tokenizer.tokenize("南京市长江大桥", Mode::Search)?;
+    let recall = tokenizer.tokenize("南京市长江大桥", Mode::RecallSearch)?;
 
     for token in tokens {
         println!("{} {}..{}", token.text, token.start_byte, token.end_byte);
@@ -41,6 +43,9 @@ fn main() -> Result<(), nexaloid::Error> {
     Ok(())
 }
 ```
+
+`Mode::Search` expands only the best Viterbi path to reduce semantic noise. `Mode::RecallSearch` emits all candidate edges for aggressive recall.
+Whitespace tokens are filtered by default; use `Tokenizer::new_default_with_whitespace(true)` or set `NxConfig.preserve_whitespace = 1`.
 
 ## Development
 
