@@ -1,10 +1,23 @@
 const std = @import("std");
-const c = @cImport({
+const builtin = @import("builtin");
+const c = if (builtin.os.tag == .windows) @cImport({
     @cInclude("stdio.h");
+    @cInclude("string.h");
+    @cInclude("windows.h");
+}) else @cImport({
+    @cInclude("fcntl.h");
+    @cInclude("string.h");
+    @cInclude("sys/mman.h");
+    @cInclude("sys/stat.h");
+    @cInclude("unistd.h");
 });
 
 const abi_version = 1;
 const candidate_provider_kind = 1;
+const artifact_magic = "NXHMM001";
+const header_len = 44;
+const default_hmm_score: f32 = -14.0;
+const allocator = std.heap.page_allocator;
 
 const NxPluginInfo = extern struct {
     abi_version: u32,
@@ -30,10 +43,52 @@ const NxPluginCandidate = extern struct {
 const NxPluginCandidateCallback = *const fn (*const NxPluginCandidate, ?*anyopaque) callconv(.c) void;
 
 const Plugin = struct {
-    artifact: []u8,
-    parsed: std.json.Parsed(std.json.Value),
-    lexicon: LexiconTrie,
+    model: *Model,
     hmm_score: f32,
+};
+
+const Model = struct {
+    path: []u8,
+    mapping: MappedFile,
+    start: [4]f64,
+    transition: [4][4]f64,
+    unknown: [4]f64,
+    emissions: []Emission,
+    lexicon_blob: []u8,
+    lexicon: LexiconTrie,
+    max_unknown_len: u32,
+    refs: usize = 1,
+
+    fn deinit(self: *Model) void {
+        self.lexicon.deinit();
+        allocator.free(self.lexicon_blob);
+        allocator.free(self.emissions);
+        self.mapping.close();
+        allocator.free(self.path);
+        allocator.destroy(self);
+    }
+};
+
+const Emission = struct {
+    codepoint: u32,
+    scores: [4]f64,
+};
+
+const MappedFile = struct {
+    data: []const u8,
+    file: if (builtin.os.tag == .windows) c.HANDLE else c_int,
+    mapping: if (builtin.os.tag == .windows) c.HANDLE else void,
+
+    fn close(self: MappedFile) void {
+        if (builtin.os.tag == .windows) {
+            _ = c.UnmapViewOfFile(self.data.ptr);
+            _ = c.CloseHandle(self.mapping);
+            _ = c.CloseHandle(self.file);
+        } else {
+            _ = c.munmap(@constCast(self.data.ptr), self.data.len);
+            _ = c.close(self.file);
+        }
+    }
 };
 
 const LexiconTrie = struct {
@@ -56,9 +111,7 @@ const LexiconTrie = struct {
         if (word.len == 0) return;
         try self.ensureRoot();
         var node_index: usize = 0;
-        for (word) |byte| {
-            node_index = try self.childOrAdd(node_index, byte);
-        }
+        for (word) |byte| node_index = try self.childOrAdd(node_index, byte);
         self.nodes.items[node_index].terminal = true;
     }
 
@@ -96,45 +149,55 @@ const Char = struct {
     codepoint: u21,
 };
 
-const State = enum(usize) {
-    B = 0,
-    M = 1,
-    E = 2,
-    S = 3,
+const State = enum(usize) { B = 0, M = 1, E = 2, S = 3 };
 
-    fn name(self: State) []const u8 {
-        return switch (self) {
-            .B => "B",
-            .M => "M",
-            .E => "E",
-            .S => "S",
-        };
-    }
-};
-
-const allocator = std.heap.page_allocator;
-const default_hmm_score: f32 = -14.0;
+var cache_mutex: std.atomic.Mutex = .unlocked;
+var cached_model: ?*Model = null;
 
 export fn nx_plugin_init(config_json: ?[*:0]const u8, out_plugin: *?*anyopaque) c_int {
     const config_z = config_json orelse return 1;
     const config = parseConfig(config_z) catch return 1;
     defer if (config.owned_artifact_path) |path| allocator.free(path);
-    const artifact = readFile(config.artifact_path) catch return 1;
-    errdefer allocator.free(artifact);
-    const parsed = std.json.parseFromSlice(std.json.Value, allocator, artifact, .{}) catch return 1;
-    errdefer parsed.deinit();
-    var lexicon = LexiconTrie.init();
-    errdefer lexicon.deinit();
-    buildLexiconTrie(&lexicon, parsed.value) catch return 1;
+
+    const model = acquireModel(std.mem.span(config.artifact_path)) catch return 1;
+    errdefer releaseModel(model);
 
     const plugin = allocator.create(Plugin) catch return 1;
-    plugin.* = .{
-        .artifact = artifact,
-        .parsed = parsed,
-        .lexicon = lexicon,
-        .hmm_score = config.hmm_score,
-    };
+    plugin.* = .{ .model = model, .hmm_score = config.hmm_score };
     out_plugin.* = @ptrCast(plugin);
+    return 0;
+}
+
+export fn nx_plugin_free(plugin_ptr: ?*anyopaque) void {
+    const plugin: *Plugin = @ptrCast(@alignCast(plugin_ptr orelse return));
+    releaseModel(plugin.model);
+    allocator.destroy(plugin);
+}
+
+export fn nx_plugin_get_info(plugin_ptr: ?*anyopaque, out_info: ?*NxPluginInfo) c_int {
+    _ = plugin_ptr;
+    const info = out_info orelse return 1;
+    info.* = .{
+        .abi_version = abi_version,
+        .name = "hmm_lattice_plugin",
+        .version = "0.2.0",
+        .kind = candidate_provider_kind,
+    };
+    return 0;
+}
+
+export fn nx_plugin_provide_candidates(
+    plugin_ptr: ?*anyopaque,
+    input: ?*const NxPluginInput,
+    callback: ?NxPluginCandidateCallback,
+    user_data: ?*anyopaque,
+) c_int {
+    const plugin: *Plugin = @ptrCast(@alignCast(plugin_ptr orelse return 1));
+    const in_data = input orelse return 1;
+    const cb = callback orelse return 1;
+    const text = in_data.text[0..in_data.text_len];
+    provideLexiconCandidates(plugin.model, text, in_data.char_len, cb, user_data);
+    provideHmmCandidates(plugin, text, cb, user_data) catch return 1;
     return 0;
 }
 
@@ -163,71 +226,179 @@ fn parseConfig(config_z: [*:0]const u8) !Config {
     };
 }
 
-fn readFile(path_z: [*:0]const u8) ![]u8 {
-    const file = c.fopen(path_z, "rb") orelse return error.OpenFailed;
-    defer _ = c.fclose(file);
-    if (c.fseek(file, 0, c.SEEK_END) != 0) return error.ReadFailed;
-    const size_raw = c.ftell(file);
-    if (size_raw < 0 or size_raw > 16 * 1024 * 1024) return error.ReadFailed;
-    if (c.fseek(file, 0, c.SEEK_SET) != 0) return error.ReadFailed;
-    const size: usize = @intCast(size_raw);
-    const buf = try allocator.alloc(u8, size);
-    errdefer allocator.free(buf);
-    if (c.fread(buf.ptr, 1, size, file) != size) return error.ReadFailed;
-    return buf;
+fn acquireModel(path: []const u8) !*Model {
+    if (!std.mem.endsWith(u8, path, ".nxhmm")) return error.BadArtifact;
+    lockCache();
+    defer cache_mutex.unlock();
+
+    if (cached_model) |model| {
+        if (!std.mem.eql(u8, model.path, path)) return error.BadArtifact;
+        model.refs += 1;
+        return model;
+    }
+
+    const model = try loadModel(path);
+    cached_model = model;
+    return model;
 }
 
-export fn nx_plugin_free(plugin_ptr: ?*anyopaque) void {
-    const plugin: *Plugin = @ptrCast(@alignCast(plugin_ptr orelse return));
-    plugin.lexicon.deinit();
-    plugin.parsed.deinit();
-    allocator.free(plugin.artifact);
-    allocator.destroy(plugin);
-}
-
-export fn nx_plugin_get_info(plugin_ptr: ?*anyopaque, out_info: ?*NxPluginInfo) c_int {
-    _ = plugin_ptr;
-    const info = out_info orelse return 1;
-    info.* = .{
-        .abi_version = abi_version,
-        .name = "hmm_lattice_plugin",
-        .version = "0.1.0",
-        .kind = candidate_provider_kind,
-    };
-    return 0;
-}
-
-export fn nx_plugin_provide_candidates(
-    plugin_ptr: ?*anyopaque,
-    input: ?*const NxPluginInput,
-    callback: ?NxPluginCandidateCallback,
-    user_data: ?*anyopaque,
-) c_int {
-    const plugin: *Plugin = @ptrCast(@alignCast(plugin_ptr orelse return 1));
-    const in_data = input orelse return 1;
-    const cb = callback orelse return 1;
-    const text = in_data.text[0..in_data.text_len];
-    provideLexiconCandidates(plugin, text, in_data.char_len, cb, user_data);
-    provideHmmCandidates(plugin, text, cb, user_data) catch return 1;
-    return 0;
-}
-
-fn buildLexiconTrie(trie: *LexiconTrie, root: std.json.Value) !void {
-    const lexicon = (((root.object.get("lexicon") orelse return error.BadArtifact).array).items);
-    for (lexicon) |entry| {
-        if (entry == .string) try trie.insert(entry.string);
+fn releaseModel(model: *Model) void {
+    lockCache();
+    defer cache_mutex.unlock();
+    model.refs -= 1;
+    if (model.refs == 0) {
+        if (cached_model == model) cached_model = null;
+        model.deinit();
     }
 }
 
-fn provideLexiconCandidates(plugin: *Plugin, text: []const u8, char_len: u32, cb: NxPluginCandidateCallback, user_data: ?*anyopaque) void {
-    if (plugin.lexicon.nodes.items.len == 0) return;
+fn lockCache() void {
+    // ponytail: spin lock is enough for plugin init/free; use a blocking mutex if this becomes hot.
+    while (!cache_mutex.tryLock()) std.atomic.spinLoopHint();
+}
+
+fn loadModel(path: []const u8) !*Model {
+    const path_z = try allocator.dupeZ(u8, path);
+    errdefer allocator.free(path_z);
+
+    var mapping = try mapFileReadOnly(path_z.ptr);
+    errdefer mapping.close();
+
+    const data = mapping.data;
+    if (data.len < header_len or !std.mem.eql(u8, data[0..8], artifact_magic)) return error.BadArtifact;
+    var offset: usize = 8;
+    const version = readU32(data, &offset) orelse return error.BadArtifact;
+    if (version != 1) return error.BadArtifact;
+    const emission_count = readU32(data, &offset) orelse return error.BadArtifact;
+    const lexicon_count = readU32(data, &offset) orelse return error.BadArtifact;
+    const raw_lexicon_len = readU32(data, &offset) orelse return error.BadArtifact;
+    const compressed_lexicon_len = readU32(data, &offset) orelse return error.BadArtifact;
+    _ = readU32(data, &offset) orelse return error.BadArtifact;
+    const max_unknown_len = readU32(data, &offset) orelse return error.BadArtifact;
+    _ = readF32(data, &offset) orelse return error.BadArtifact;
+    _ = readF32(data, &offset) orelse return error.BadArtifact;
+
+    var start: [4]f64 = undefined;
+    for (&start) |*score| score.* = readF64(data, &offset) orelse return error.BadArtifact;
+
+    var transition: [4][4]f64 = undefined;
+    for (&transition) |*row| {
+        for (row) |*score| score.* = readF64(data, &offset) orelse return error.BadArtifact;
+    }
+
+    var unknown: [4]f64 = undefined;
+    for (&unknown) |*score| score.* = readF64(data, &offset) orelse return error.BadArtifact;
+
+    const emissions = try allocator.alloc(Emission, emission_count);
+    errdefer allocator.free(emissions);
+    for (emissions) |*emission| {
+        emission.codepoint = readU32(data, &offset) orelse return error.BadArtifact;
+        for (&emission.scores) |*score| score.* = readF64(data, &offset) orelse return error.BadArtifact;
+    }
+
+    const compressed_end = offset + @as(usize, compressed_lexicon_len);
+    if (compressed_end > data.len) return error.BadArtifact;
+    const lexicon_blob = try decompressZlib(data[offset..compressed_end], raw_lexicon_len);
+    errdefer allocator.free(lexicon_blob);
+
+    var lexicon = LexiconTrie.init();
+    errdefer lexicon.deinit();
+    try buildLexiconTrie(&lexicon, lexicon_blob, lexicon_count);
+
+    const model = try allocator.create(Model);
+    model.* = .{
+        .path = path_z,
+        .mapping = mapping,
+        .start = start,
+        .transition = transition,
+        .unknown = unknown,
+        .emissions = emissions,
+        .lexicon_blob = lexicon_blob,
+        .lexicon = lexicon,
+        .max_unknown_len = max_unknown_len,
+    };
+    return model;
+}
+
+fn mapFileReadOnly(path_z: [*:0]const u8) !MappedFile {
+    if (builtin.os.tag == .windows) {
+        const file = c.CreateFileA(path_z, c.GENERIC_READ, c.FILE_SHARE_READ, null, c.OPEN_EXISTING, c.FILE_ATTRIBUTE_NORMAL, null);
+        if (file == c.INVALID_HANDLE_VALUE) return error.OpenFailed;
+        errdefer _ = c.CloseHandle(file);
+
+        var high: c.DWORD = 0;
+        const low = c.GetFileSize(file, &high);
+        if (low == c.INVALID_FILE_SIZE and c.GetLastError() != c.NO_ERROR) return error.OpenFailed;
+        if (high != 0 or low == 0) return error.BadArtifact;
+
+        const mapping = c.CreateFileMappingA(file, null, c.PAGE_READONLY, 0, 0, null);
+        if (mapping == null) return error.OpenFailed;
+        errdefer _ = c.CloseHandle(mapping);
+
+        const view = c.MapViewOfFile(mapping, c.FILE_MAP_READ, 0, 0, 0) orelse return error.OpenFailed;
+        return .{
+            .data = @as([*]const u8, @ptrCast(view))[0..low],
+            .file = file,
+            .mapping = mapping,
+        };
+    } else {
+        const fd = c.open(path_z, c.O_RDONLY);
+        if (fd < 0) return error.OpenFailed;
+        errdefer _ = c.close(fd);
+
+        const end = c.lseek(fd, 0, c.SEEK_END);
+        if (end <= 0) return error.OpenFailed;
+        const end_u: u64 = @intCast(end);
+        if (end_u > std.math.maxInt(usize)) return error.BadArtifact;
+        const size: usize = @intCast(end_u);
+        const view = c.mmap(null, size, c.PROT_READ, c.MAP_PRIVATE, fd, 0);
+        if (view == c.MAP_FAILED) return error.OpenFailed;
+        return .{
+            .data = @as([*]const u8, @ptrCast(view))[0..size],
+            .file = fd,
+            .mapping = {},
+        };
+    }
+}
+
+fn decompressZlib(compressed: []const u8, expected_len: u32) ![]u8 {
+    var input: std.Io.Reader = .fixed(compressed);
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    errdefer output.deinit();
+
+    var buffer: [std.compress.flate.max_window_len]u8 = undefined;
+    var dec: std.compress.flate.Decompress = .init(&input, .zlib, &buffer);
+    _ = try dec.reader.streamRemaining(&output.writer);
+    const raw = try output.toOwnedSlice();
+    if (raw.len != expected_len) {
+        allocator.free(raw);
+        return error.BadArtifact;
+    }
+    return raw;
+}
+
+fn buildLexiconTrie(trie: *LexiconTrie, blob: []const u8, expected_count: u32) !void {
+    var offset: usize = 0;
+    var count: u32 = 0;
+    while (offset < blob.len) : (count += 1) {
+        const len = readU16(blob, &offset) orelse return error.BadArtifact;
+        const end = offset + len;
+        if (end > blob.len) return error.BadArtifact;
+        try trie.insert(blob[offset..end]);
+        offset = end;
+    }
+    if (count != expected_count) return error.BadArtifact;
+}
+
+fn provideLexiconCandidates(model: *Model, text: []const u8, char_len: u32, cb: NxPluginCandidateCallback, user_data: ?*anyopaque) void {
+    if (model.lexicon.nodes.items.len == 0) return;
     var byte_start: usize = 0;
     while (byte_start < text.len) : (byte_start += 1) {
         var node_index: usize = 0;
         var byte_end = byte_start;
         while (byte_end < text.len) : (byte_end += 1) {
-            node_index = plugin.lexicon.child(node_index, text[byte_end]) orelse break;
-            if (plugin.lexicon.nodes.items[node_index].terminal) {
+            node_index = model.lexicon.child(node_index, text[byte_end]) orelse break;
+            if (model.lexicon.nodes.items[node_index].terminal) {
                 const end = byte_end + 1;
                 const start_char = byteToChar(text, byte_start) orelse continue;
                 const end_char = byteToChar(text, end) orelse continue;
@@ -267,14 +438,13 @@ fn provideHmmCandidates(plugin: *Plugin, text: []const u8, cb: NxPluginCandidate
         while (run_start < chars.items.len and !isHan(chars.items[run_start].codepoint)) : (run_start += 1) {}
         var run_end = run_start;
         while (run_end < chars.items.len and isHan(chars.items[run_end].codepoint)) : (run_end += 1) {}
-        if (run_end - run_start >= 2) try decodeHmmRun(plugin, text, chars.items, run_start, run_end, cb, user_data);
+        if (run_end - run_start >= 2) try decodeHmmRun(plugin, chars.items, run_start, run_end, cb, user_data);
         run_start = run_end + 1;
     }
 }
 
 fn decodeHmmRun(
     plugin: *Plugin,
-    text: []const u8,
     chars: []const Char,
     start: usize,
     end: usize,
@@ -291,15 +461,16 @@ fn decodeHmmRun(
     for (prev) |*row| row.* = .{ null, null, null, null };
 
     inline for (.{ State.B, State.S }) |state| {
-        scores[0][@intFromEnum(state)] = modelScore(plugin, "start", state.name(), null) + emissionScore(plugin, state, text[chars[start].start_byte..chars[start].end_byte]);
+        scores[0][@intFromEnum(state)] = plugin.model.start[@intFromEnum(state)] + emissionScore(plugin.model, state, chars[start].codepoint);
     }
 
     var i: usize = 1;
     while (i < n) : (i += 1) {
         inline for (.{ State.B, State.M, State.E, State.S }) |state| {
             inline for (.{ State.B, State.M, State.E, State.S }) |from| {
-                if (transitionScore(plugin, from, state)) |trans| {
-                    const candidate = scores[i - 1][@intFromEnum(from)] + trans + emissionScore(plugin, state, text[chars[start + i].start_byte..chars[start + i].end_byte]);
+                const trans = plugin.model.transition[@intFromEnum(from)][@intFromEnum(state)];
+                if (std.math.isFinite(trans)) {
+                    const candidate = scores[i - 1][@intFromEnum(from)] + trans + emissionScore(plugin.model, state, chars[start + i].codepoint);
                     if (candidate > scores[i][@intFromEnum(state)]) {
                         scores[i][@intFromEnum(state)] = candidate;
                         prev[i][@intFromEnum(state)] = from;
@@ -324,16 +495,14 @@ fn decodeHmmRun(
     while (i < n) : (i += 1) {
         switch (states[i]) {
             .B => word_start = start + i,
-            .E => {
-                try emitHmmCandidate(chars, word_start, start + i + 1, plugin.hmm_score, cb, user_data);
-            },
+            .E => try emitHmmCandidate(word_start, start + i + 1, plugin.hmm_score, cb, user_data),
             .S => word_start = start + i + 1,
             .M => {},
         }
     }
 }
 
-fn emitHmmCandidate(chars: []const Char, start: usize, end: usize, score: f32, cb: NxPluginCandidateCallback, user_data: ?*anyopaque) !void {
+fn emitHmmCandidate(start: usize, end: usize, score: f32, cb: NxPluginCandidateCallback, user_data: ?*anyopaque) !void {
     if (end <= start + 1) return;
     var candidate = NxPluginCandidate{
         .start_char = @intCast(start),
@@ -342,35 +511,19 @@ fn emitHmmCandidate(chars: []const Char, start: usize, end: usize, score: f32, c
         .source = 0,
         .flags = 2,
     };
-    _ = chars;
     cb(&candidate, user_data);
 }
 
-fn transitionScore(plugin: *Plugin, from: State, to: State) ?f64 {
-    const transition = ((plugin.parsed.value.object.get("model") orelse return null).object.get("transition") orelse return null).object;
-    const from_map = (transition.get(from.name()) orelse return null).object;
-    return numberValue(from_map.get(to.name()) orelse return null);
-}
-
-fn emissionScore(plugin: *Plugin, state: State, ch: []const u8) f64 {
-    const model = (plugin.parsed.value.object.get("model") orelse return -20.0).object;
-    if (model.get("emission")) |emission_value| {
-        const state_map = (emission_value.object.get(state.name()) orelse return unknownEmission(plugin, state)).object;
-        if (state_map.get(ch)) |value| return numberValue(value) orelse unknownEmission(plugin, state);
+fn emissionScore(model: *Model, state: State, codepoint: u21) f64 {
+    var lo: usize = 0;
+    var hi: usize = model.emissions.len;
+    while (lo < hi) {
+        const mid = lo + (hi - lo) / 2;
+        const item = model.emissions[mid];
+        if (item.codepoint == codepoint) return item.scores[@intFromEnum(state)];
+        if (item.codepoint < codepoint) lo = mid + 1 else hi = mid;
     }
-    return unknownEmission(plugin, state);
-}
-
-fn unknownEmission(plugin: *Plugin, state: State) f64 {
-    const model = (plugin.parsed.value.object.get("model") orelse return -20.0).object;
-    const unknown = (model.get("unknown_emission") orelse return -20.0).object;
-    return numberValue(unknown.get(state.name()) orelse return -20.0) orelse -20.0;
-}
-
-fn modelScore(plugin: *Plugin, field: []const u8, key: []const u8, fallback: ?f64) f64 {
-    const model = (plugin.parsed.value.object.get("model") orelse return fallback orelse -20.0).object;
-    const object = (model.get(field) orelse return fallback orelse -20.0).object;
-    return numberValue(object.get(key) orelse return fallback orelse -20.0) orelse fallback orelse -20.0;
+    return model.unknown[@intFromEnum(state)];
 }
 
 fn numberValue(value: std.json.Value) ?f64 {
@@ -380,6 +533,31 @@ fn numberValue(value: std.json.Value) ?f64 {
         .number_string => |v| std.fmt.parseFloat(f64, v) catch null,
         else => null,
     };
+}
+
+fn readU16(data: []const u8, offset: *usize) ?u16 {
+    if (offset.* + 2 > data.len) return null;
+    const out = std.mem.readInt(u16, data[offset.*..][0..2], .little);
+    offset.* += 2;
+    return out;
+}
+
+fn readU32(data: []const u8, offset: *usize) ?u32 {
+    if (offset.* + 4 > data.len) return null;
+    const out = std.mem.readInt(u32, data[offset.*..][0..4], .little);
+    offset.* += 4;
+    return out;
+}
+
+fn readF32(data: []const u8, offset: *usize) ?f32 {
+    return @bitCast(readU32(data, offset) orelse return null);
+}
+
+fn readF64(data: []const u8, offset: *usize) ?f64 {
+    if (offset.* + 8 > data.len) return null;
+    const bits = std.mem.readInt(u64, data[offset.*..][0..8], .little);
+    offset.* += 8;
+    return @bitCast(bits);
 }
 
 fn isHan(cp: u21) bool {
