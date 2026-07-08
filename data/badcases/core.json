@@ -26,7 +26,7 @@
   {
     "id": "search_001",
     "text": "中国科学院计算技术研究所",
-    "expected_search_contains": ["中国科学院", "科学院", "计算技术", "技术研究所", "研究所"],
+    "expected_search_contains": ["中国科学院", "科学院", "计算技术", "研究所"],
     "tags": ["search"]
   },
   {
@@ -76,6 +76,7 @@
     "text": "南京市长江大桥",
     "mode": "raw_search",
     "expected_search_contains": ["南京", "南京市", "长江", "长江大桥", "大桥"],
+    "expected_search_excludes": ["市长"],
     "expected_search_unique": true,
     "expected_search_min_len": 2,
     "tags": ["search", "noise"]
@@ -84,7 +85,8 @@
     "id": "search_003",
     "text": "长春市长春节前发表讲话",
     "mode": "raw_search",
-    "expected_search_contains": ["长春", "长春市", "市长", "春节", "春节前", "发表", "讲话"],
+    "expected_search_contains": ["长春", "市长", "春节", "春节前", "发表", "讲话"],
+    "expected_search_excludes": ["长春市"],
     "expected_search_unique": true,
     "expected_search_min_len": 2,
     "tags": ["search", "noise"]
@@ -98,6 +100,25 @@
     "expected_search_unique": true,
     "expected_search_min_len": 2,
     "tags": ["search", "mixed_text"]
+  },
+  {
+    "id": "search_005",
+    "text": "研究生命起源",
+    "mode": "raw_search",
+    "expected_search_contains": ["研究", "生命", "起源"],
+    "expected_search_excludes": ["研究生", "究生"],
+    "expected_search_unique": true,
+    "expected_search_min_len": 2,
+    "tags": ["search", "noise"]
+  },
+  {
+    "id": "recall_search_001",
+    "text": "研究生命起源",
+    "mode": "recall_search",
+    "expected_search_contains": ["研究生", "究生"],
+    "expected_search_unique": true,
+    "expected_search_min_len": 2,
+    "tags": ["search", "recall"]
   },
   {
     "id": "structured_001",

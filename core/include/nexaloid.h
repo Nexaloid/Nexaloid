@@ -22,11 +22,12 @@ typedef enum {
     NX_ERR_INTERNAL = 255
 } NxStatus;
 
-/* Tokenization modes. Accurate/search are implemented; full is kept for API compatibility. */
+/* Tokenization modes. Search expands the best path; recall search exposes all candidate edges. */
 typedef enum {
     NX_MODE_ACCURATE = 0,
     NX_MODE_FULL = 1,
-    NX_MODE_SEARCH = 2
+    NX_MODE_SEARCH = 2,
+    NX_MODE_RECALL_SEARCH = 3
 } NxMode;
 
 /* Source of a token or candidate edge, used for debugging and result explanation. */
@@ -66,8 +67,10 @@ typedef struct {
     uint32_t enable_normalization;
     /* Reserved switch for the future plugin system. */
     uint32_t enable_plugins;
+    /* Preserve pure whitespace tokens in accurate/full modes. Default 0 keeps search/RAG-friendly filtering. */
+    uint32_t preserve_whitespace;
     /* ABI extension slots; consume these before changing struct size. */
-    uint32_t reserved[8];
+    uint32_t reserved[7];
 } NxConfig;
 
 /* Output token. Both byte and char offsets are kept to preserve exact source slicing. */

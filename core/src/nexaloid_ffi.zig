@@ -31,6 +31,7 @@ const NxMode = enum(c_int) {
     accurate = 0,
     full = 1,
     search = 2,
+    recall_search = 3,
 };
 
 const NxConfig = extern struct {
@@ -39,7 +40,8 @@ const NxConfig = extern struct {
     enable_hmm: u32,
     enable_normalization: u32,
     enable_plugins: u32,
-    reserved: [8]u32,
+    preserve_whitespace: u32,
+    reserved: [7]u32,
 };
 
 const NxToken = extern struct {
@@ -81,6 +83,7 @@ export fn nx_engine_new(config: ?*const NxConfig, out_engine: ?*?*NxEngine) call
     }
 
     if (config) |cfg| {
+        engine.tokenizer.preserve_whitespace = cfg.preserve_whitespace != 0;
         if (cfg.dict_path) |path| loadDictFile(engine, path, .base) catch return .io;
         if (cfg.user_dict_path) |path| loadDictFile(engine, path, .user) catch return .io;
     }
@@ -632,6 +635,7 @@ fn modeFromAbi(mode: c_int) ?tokenizer_mod.Mode {
         @intFromEnum(NxMode.accurate) => .accurate,
         @intFromEnum(NxMode.full) => .full,
         @intFromEnum(NxMode.search) => .search,
+        @intFromEnum(NxMode.recall_search) => .recall_search,
         else => null,
     };
 }

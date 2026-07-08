@@ -18,6 +18,24 @@ pub fn main() !void {
     try expect(&tokenizer, "我们在日本东京做RAG中文检索实验", &.{ "我们", "在", "日本", "东京", "做", "RAG", "中文", "检索", "实验" });
     try expect(&tokenizer, "我爱北京天安门", &.{ "我", "爱", "北京", "天安门" });
     try expect(&tokenizer, "长春市长春节前发表讲话", &.{ "长春", "市长", "春节前", "发表", "讲话" });
+    try expect(&tokenizer, "文档 秒", &.{ "文档", "秒" });
+
+    var preserve_tokenizer = try nx.Tokenizer.initOptions("../../data/dict/nexaloid.tsv", true);
+    defer preserve_tokenizer.deinit();
+    try expect(&preserve_tokenizer, "文档 秒", &.{ "文档", " ", "秒" });
+
+    var search = try tokenizer.tokenize(std.heap.page_allocator, "研究生命起源", .search);
+    defer search.deinit(std.heap.page_allocator);
+    for (search.items) |token| {
+        try std.testing.expect(!std.mem.eql(u8, token.text, "研究生"));
+    }
+    var recall = try tokenizer.tokenize(std.heap.page_allocator, "研究生命起源", .recall_search);
+    defer recall.deinit(std.heap.page_allocator);
+    var saw_student = false;
+    for (recall.items) |token| {
+        if (std.mem.eql(u8, token.text, "研究生")) saw_student = true;
+    }
+    try std.testing.expect(saw_student);
 
     try tokenizer.loadRulesJson(
         \\{"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]}

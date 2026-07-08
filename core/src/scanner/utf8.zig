@@ -72,18 +72,18 @@ pub fn classify(cp: u32) types.NxCharClass {
     }
     if ((cp >= 'A' and cp <= 'Z') or (cp >= 'a' and cp <= 'z')) return .latin;
     if (cp >= '0' and cp <= '9') return .digit;
-    if (cp == ' ' or cp == '\t' or cp == '\n' or cp == '\r') return .space;
+    if (cp == ' ' or cp == '\t' or cp == '\n' or cp == '\r' or cp == 0x3000) return .space;
     if ((cp >= 0x3000 and cp <= 0x303F) or (cp < 0x80 and std.ascii.isPunctuation(@intCast(cp)))) return .punct;
     if (cp >= 0x1F300 and cp <= 0x1FAFF) return .emoji;
     return .other;
 }
 
 test "scan preserves byte and char offsets" {
-    const input = "A中🙂";
-    var out: [3]types.NxChar = undefined;
+    const input = "A中🙂\u{3000}";
+    var out: [4]types.NxChar = undefined;
 
     const Ctx = struct {
-        out: *[3]types.NxChar,
+        out: *[4]types.NxChar,
         n: usize = 0,
     };
     var ctx = Ctx{ .out = &out };
@@ -95,13 +95,14 @@ test "scan preserves byte and char offsets" {
         }
     }.emit);
 
-    try std.testing.expectEqual(@as(usize, 3), ctx.n);
+    try std.testing.expectEqual(@as(usize, 4), ctx.n);
     try std.testing.expectEqual(@as(u32, 0), out[0].start_byte);
     try std.testing.expectEqual(@as(u32, 1), out[1].start_byte);
     try std.testing.expectEqual(@as(u32, 4), out[2].start_byte);
     try std.testing.expectEqual(types.NxCharClass.latin, out[0].char_class);
     try std.testing.expectEqual(types.NxCharClass.han, out[1].char_class);
     try std.testing.expectEqual(types.NxCharClass.emoji, out[2].char_class);
+    try std.testing.expectEqual(types.NxCharClass.space, out[3].char_class);
 }
 
 test "scan rejects invalid utf8" {

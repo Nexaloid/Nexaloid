@@ -29,7 +29,7 @@ const hmmManifestPath = fs.existsSync(repoHmmManifest) ? repoHmmManifest : packa
 // JavaScript stays as a convenience shell; segmentation is implemented by the native addon.
 class Tokenizer extends native.Tokenizer {
   constructor(options = {}) {
-    super(options.dictPath || (fs.existsSync(repoDict) ? repoDict : packagedDict));
+    super(options.dictPath || (fs.existsSync(repoDict) ? repoDict : packagedDict), options.preserveWhitespace === true);
   }
 
   lcut(text, options = {}) {
@@ -64,6 +64,7 @@ module.exports = {
   Mode: {
     ACCURATE: 0,
     FULL: 1,
-    SEARCH: 2
+    SEARCH: 2,
+    RECALL_SEARCH: 3
   }
 };

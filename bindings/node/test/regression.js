@@ -1,5 +1,5 @@
 const fs = require("node:fs");
-const { Tokenizer, hmmArtifactPath, hmmManifest, hmmManifestPath } = require("..");
+const { Tokenizer, Mode, hmmArtifactPath, hmmManifest, hmmManifestPath } = require("..");
 
 const tokenizer = new Tokenizer();
 
@@ -24,13 +24,20 @@ assertWords("南京市长江大桥", ["南京市", "长江大桥"]);
 assertWords("我们在日本东京做RAG中文检索实验", ["我们", "在", "日本", "东京", "做", "RAG", "中文", "检索", "实验"]);
 assertWords("我爱北京天安门", ["我", "爱", "北京", "天安门"]);
 assertWords("长春市长春节前发表讲话", ["长春", "市长", "春节前", "发表", "讲话"]);
+assertWords("文档 秒", ["文档", "秒"]);
 assertSearch("ChatGPT-5.5支持中文RAG检索。", ["ChatGPT-5.5", "中文", "RAG", "检索"], ["Ch", "Cha", "ha"]);
+assertSearch("研究生命起源", ["研究", "生命", "起源"], ["研究生", "究生"]);
+if (!tokenizer.lcut("研究生命起源", { mode: Mode.RECALL_SEARCH }).includes("研究生")) throw new Error("recall search missing candidate");
 tokenizer.loadRulesJson('{"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]}');
 if (!tokenizer.lcut("买SH600519").includes("SH600519")) throw new Error("missing custom rule token");
 tokenizer.clearRules();
 if (!fs.existsSync(hmmArtifactPath)) throw new Error(`missing HMM artifact: ${hmmArtifactPath}`);
 if (!fs.existsSync(hmmManifestPath)) throw new Error(`missing HMM manifest: ${hmmManifestPath}`);
 if (hmmManifest().quality.lattice_heldout.token_f1 < 0.98) throw new Error("bad HMM manifest quality");
+
+const preserveTokenizer = new Tokenizer({ preserveWhitespace: true });
+if (preserveTokenizer.lcut("文档 秒").join("/") !== "文档/ /秒") throw new Error("preserveWhitespace failed");
+preserveTokenizer.close();
 
 console.log("node regression passed");
 tokenizer.close();

@@ -15,6 +15,7 @@ class Mode(IntEnum):
     ACCURATE = 0
     FULL = 1
     SEARCH = 2
+    RECALL_SEARCH = 3
 
 
 class _NxConfig(ctypes.Structure):
@@ -25,7 +26,8 @@ class _NxConfig(ctypes.Structure):
         ("enable_hmm", ctypes.c_uint32),
         ("enable_normalization", ctypes.c_uint32),
         ("enable_plugins", ctypes.c_uint32),
-        ("reserved", ctypes.c_uint32 * 8),
+        ("preserve_whitespace", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32 * 7),
     ]
 
 
@@ -338,6 +340,7 @@ class Tokenizer:
         plugin_dir: str | os.PathLike[str] | None = None,
         plugin_config_json: str | None = None,
         rule_config: dict | None = None,
+        preserve_whitespace: bool = False,
     ):
         resolved_dict = _resolve_dict_path(dict_path)
         resolved_domain_dict = _resolve_domain_dict_path(domain)
@@ -345,6 +348,7 @@ class Tokenizer:
         self._user_dict_path = resolved_domain_dict
         self._rule_config = _normalize_rule_config(rule_config)
         self._rules_json = _custom_rules_json(rule_config)
+        self._preserve_whitespace = bool(preserve_whitespace)
         self._engine = self._open_engine()
         self._hmm_engine: ctypes.c_void_p | None = None
         self._hmm_plugin_path: Path | None = None
@@ -367,6 +371,7 @@ class Tokenizer:
             config.dict_path = str(resolved_dict).encode("utf-8")
         if resolved_user_dict is not None:
             config.user_dict_path = str(resolved_user_dict).encode("utf-8")
+        config.preserve_whitespace = 1 if self._preserve_whitespace else 0
         self._check(_LIB.nx_engine_new(ctypes.byref(config), ctypes.byref(engine)))
         self._apply_rule_config(engine)
         self._apply_custom_rules(engine)

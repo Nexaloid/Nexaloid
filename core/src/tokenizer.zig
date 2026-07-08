@@ -14,6 +14,7 @@ pub const Tokenizer = struct {
     user_trie: trie_mod.TempTrie,
     rule_config: rule_matcher.RuleConfig = .{},
     custom_rules: rule_matcher.CustomRules,
+    preserve_whitespace: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) !Tokenizer {
         var trie = try trie_mod.TempTrie.init(allocator);
@@ -90,11 +91,13 @@ pub const Tokenizer = struct {
         defer lattice.deinit();
         try addCandidates(candidate_ctx, self.allocator, text, scan_ctx.chars.items, &lattice);
         try lattice_mod.addUnknownFallback(&lattice, scan_ctx.chars.items);
-        if (mode == .search) return searchTokens(self.allocator, &lattice, scan_ctx.chars.items);
-        // Accurate mode chooses the globally best path, then drops pure whitespace tokens.
+        if (mode == .recall_search) return recallSearchTokens(self.allocator, &lattice, scan_ctx.chars.items);
+        // Accurate mode chooses the globally best path, with whitespace retention controlled by config.
         var path = try decoder.decode(self.allocator, &lattice);
         defer path.deinit(self.allocator);
         try ensureCompletePath(path.items, @intCast(scan_ctx.chars.items.len));
+        if (mode == .search) return searchTokens(self.allocator, path.items, scan_ctx.chars.items);
+        if (self.preserve_whitespace) return cloneEdges(self.allocator, path.items);
         return filterSpaces(self.allocator, path.items, scan_ctx.chars.items);
     }
 };
@@ -103,13 +106,18 @@ pub const Mode = enum {
     accurate,
     full,
     search,
+    recall_search,
 };
 
-fn searchTokens(allocator: std.mem.Allocator, lattice: *const lattice_mod.Lattice, chars: []const types.NxChar) !std.ArrayListUnmanaged(types.NxEdge) {
+fn recallSearchTokens(allocator: std.mem.Allocator, lattice: *const lattice_mod.Lattice, chars: []const types.NxChar) !std.ArrayListUnmanaged(types.NxEdge) {
+    return searchTokens(allocator, lattice.edges.items, chars);
+}
+
+fn searchTokens(allocator: std.mem.Allocator, edges: []const types.NxEdge, chars: []const types.NxChar) !std.ArrayListUnmanaged(types.NxEdge) {
     var out: std.ArrayListUnmanaged(types.NxEdge) = .empty;
     errdefer out.deinit(allocator);
-    for (lattice.edges.items) |edge| {
-        // Search mode exposes all explicit candidates plus small ngrams for recall.
+    for (edges) |edge| {
+        // Search-like modes expose explicit candidates plus small ngrams for recall.
         if (edge.source != .unknown) try appendSearchToken(allocator, &out, edge, chars);
         try addSearchNgrams(allocator, &out, edge, chars);
     }
@@ -185,6 +193,13 @@ fn ensureCompletePath(edges: []const types.NxEdge, char_len: u32) !void {
     if (cursor != char_len) return error.NoPath;
 }
 
+fn cloneEdges(allocator: std.mem.Allocator, edges: []const types.NxEdge) !std.ArrayListUnmanaged(types.NxEdge) {
+    var out: std.ArrayListUnmanaged(types.NxEdge) = .empty;
+    errdefer out.deinit(allocator);
+    try out.appendSlice(allocator, edges);
+    return out;
+}
+
 fn filterSpaces(allocator: std.mem.Allocator, edges: []const types.NxEdge, chars: []const types.NxChar) !std.ArrayListUnmanaged(types.NxEdge) {
     var out: std.ArrayListUnmanaged(types.NxEdge) = .empty;
     errdefer out.deinit(allocator);
@@ -242,6 +257,31 @@ test "tokenizer keeps mixed ascii terms as one token" {
     try std.testing.expectEqual(@as(u32, 20), tokens.items[4].start_byte);
     try std.testing.expectEqual(@as(u32, 28), tokens.items[4].end_byte);
     try std.testing.expectEqual(@as(u32, 4), tokens.items[5].word_id);
+}
+
+test "tokenizer can preserve whitespace when configured" {
+    var tokenizer = try Tokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+    try tokenizer.addWord("中文", 1, 10.0, 0);
+    try tokenizer.addWord("混排", 2, 10.0, 0);
+    try tokenizer.addWord("第二行", 3, 10.0, 0);
+
+    var filtered = try tokenizer.tokenize("中文 English\t混排\n第二行");
+    defer filtered.deinit(std.testing.allocator);
+    for (filtered.items) |token| {
+        const text = "中文 English\t混排\n第二行"[token.start_byte..token.end_byte];
+        try std.testing.expect(!std.mem.eql(u8, text, " "));
+        try std.testing.expect(!std.mem.eql(u8, text, "\t"));
+        try std.testing.expect(!std.mem.eql(u8, text, "\n"));
+    }
+
+    tokenizer.preserve_whitespace = true;
+    var preserved = try tokenizer.tokenize("中文 English\t混排\n第二行");
+    defer preserved.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 7), preserved.items.len);
+    try std.testing.expectEqualStrings(" ", "中文 English\t混排\n第二行"[preserved.items[1].start_byte..preserved.items[1].end_byte]);
+    try std.testing.expectEqualStrings("\t", "中文 English\t混排\n第二行"[preserved.items[3].start_byte..preserved.items[3].end_byte]);
+    try std.testing.expectEqualStrings("\n", "中文 English\t混排\n第二行"[preserved.items[5].start_byte..preserved.items[5].end_byte]);
 }
 
 test "tokenizer can disable ascii term rule" {
@@ -375,6 +415,34 @@ test "search mode deduplicates text and skips ascii ngrams" {
         }
     }
     try std.testing.expect(saw_ascii);
+}
+
+test "search mode avoids cross-boundary recall candidates" {
+    var tokenizer = try Tokenizer.init(std.testing.allocator);
+    defer tokenizer.deinit();
+    try tokenizer.addWord("南京市", 1, 80.0, 0);
+    try tokenizer.addWord("长江大桥", 2, 80.0, 0);
+    try tokenizer.addWord("市长", 3, 80.0, 0);
+
+    var search = try tokenizer.tokenizeMode("南京市长江大桥", .search);
+    defer search.deinit(std.testing.allocator);
+    var recall = try tokenizer.tokenizeMode("南京市长江大桥", .recall_search);
+    defer recall.deinit(std.testing.allocator);
+
+    var search_saw_mayor = false;
+    for (search.items) |token| {
+        const text = "南京市长江大桥"[token.start_byte..token.end_byte];
+        if (std.mem.eql(u8, text, "市长")) search_saw_mayor = true;
+    }
+
+    var recall_saw_mayor = false;
+    for (recall.items) |token| {
+        const text = "南京市长江大桥"[token.start_byte..token.end_byte];
+        if (std.mem.eql(u8, text, "市长")) recall_saw_mayor = true;
+    }
+
+    try std.testing.expect(!search_saw_mayor);
+    try std.testing.expect(recall_saw_mayor);
 }
 
 test "deleted base word falls back without dropping text" {

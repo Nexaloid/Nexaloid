@@ -18,6 +18,7 @@ pub enum Mode {
     Accurate,
     Full,
     Search,
+    RecallSearch,
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +41,10 @@ pub struct Tokenizer {
 
 impl Tokenizer {
     pub fn new_default() -> Result<Self, Error> {
+        Self::new_default_with_whitespace(false)
+    }
+
+    pub fn new_default_with_whitespace(preserve_whitespace: bool) -> Result<Self, Error> {
         let dict =
             CString::new(sys::bundled_dict_path().to_string_lossy().as_bytes()).map_err(|_| {
                 Error {
@@ -49,6 +54,7 @@ impl Tokenizer {
             })?;
         let config = sys::NxConfig {
             dict_path: dict.as_ptr(),
+            preserve_whitespace: u32::from(preserve_whitespace),
             ..Default::default()
         };
         Self::new(config)
@@ -191,6 +197,7 @@ impl From<Mode> for sys::NxMode {
             Mode::Accurate => sys::NxMode::Accurate,
             Mode::Full => sys::NxMode::Full,
             Mode::Search => sys::NxMode::Search,
+            Mode::RecallSearch => sys::NxMode::RecallSearch,
         }
     }
 }
@@ -269,6 +276,16 @@ mod tests {
             );
         }
 
+        assert_eq!(
+            texts(tokenizer.tokenize("文档 秒", Mode::Accurate).unwrap()),
+            vec!["文档", "秒"]
+        );
+        let tokenizer = Tokenizer::new_default_with_whitespace(true).unwrap();
+        assert_eq!(
+            texts(tokenizer.tokenize("文档 秒", Mode::Accurate).unwrap()),
+            vec!["文档", " ", "秒"]
+        );
+
         let search = texts(
             tokenizer
                 .tokenize("ChatGPT-5.5支持中文RAG检索。", Mode::Search)
@@ -286,6 +303,15 @@ mod tests {
                 "unexpected {word}: {search:?}"
             );
         }
+
+        let search = texts(tokenizer.tokenize("研究生命起源", Mode::Search).unwrap());
+        assert!(!search.iter().any(|item| item == "研究生"));
+        let recall = texts(
+            tokenizer
+                .tokenize("研究生命起源", Mode::RecallSearch)
+                .unwrap(),
+        );
+        assert!(recall.iter().any(|item| item == "研究生"));
     }
 
     #[test]

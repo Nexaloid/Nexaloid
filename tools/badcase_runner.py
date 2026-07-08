@@ -31,6 +31,8 @@ def run(path: Path) -> int:
         else:
             if case.get("mode") == "raw_search":
                 actual = [token.text for token in tokenizer.tokenize(text, Mode.SEARCH)]
+            elif case.get("mode") == "recall_search":
+                actual = [token.text for token in tokenizer.tokenize(text, Mode.RECALL_SEARCH)]
             else:
                 actual = list(jieba.cut_for_search(text))
             expected = case["expected_search_contains"]

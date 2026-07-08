@@ -22,7 +22,7 @@ if str(PY_SRC) not in sys.path:
 if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 
-from nexaloid import Tokenizer  # noqa: E402
+from nexaloid import Mode, Tokenizer  # noqa: E402
 from nexaloid.tokenizer import _resolve_dict_path  # noqa: E402
 from nexaloid.tokenizer import NexaloidError  # noqa: E402
 from check_hmm_artifact import main as check_hmm_artifact_main  # noqa: E402
@@ -228,6 +228,34 @@ def check_python_rule_config() -> None:
         tokenizer.close()
 
 
+def check_search_vs_recall_search() -> None:
+    tokenizer = Tokenizer()
+    try:
+        search = [token.text for token in tokenizer.tokenize("研究生命起源", Mode.SEARCH)]
+        recall = [token.text for token in tokenizer.tokenize("研究生命起源", Mode.RECALL_SEARCH)]
+        assert "研究生" not in search
+        assert "究生" not in search
+        assert "研究生" in recall
+    finally:
+        tokenizer.close()
+
+
+def check_whitespace_option() -> None:
+    text = "中文 English\t混排\n第二行"
+    tokenizer = Tokenizer()
+    try:
+        assert [token.text for token in tokenizer.tokenize(text)] == ["中文", "English", "混排", "第二行"]
+    finally:
+        tokenizer.close()
+
+    tokenizer = Tokenizer(preserve_whitespace=True)
+    try:
+        assert [token.text for token in tokenizer.tokenize(text)] == ["中文", " ", "English", "\t", "混排", "\n", "第二行"]
+        assert [token.text for token in tokenizer.tokenize("中文\u3000English")] == ["中文", "\u3000", "English"]
+    finally:
+        tokenizer.close()
+
+
 def check_version_exported() -> None:
     import nexaloid
 
@@ -310,6 +338,8 @@ def main() -> int:
         check_token_coverage,
         check_traditional_mixed_text,
         check_python_rule_config,
+        check_search_vs_recall_search,
+        check_whitespace_option,
         check_version_exported,
         check_repo_dict_preferred,
         check_python_hmm_artifact_path,

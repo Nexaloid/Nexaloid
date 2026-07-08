@@ -7,6 +7,7 @@ pub const Mode = enum(c.NxMode) {
     accurate = c.NX_MODE_ACCURATE,
     full = c.NX_MODE_FULL,
     search = c.NX_MODE_SEARCH,
+    recall_search = c.NX_MODE_RECALL_SEARCH,
 };
 
 pub const Token = struct {
@@ -23,8 +24,13 @@ pub const Tokenizer = struct {
     engine: *c.NxEngine,
 
     pub fn init(dict_path: ?[*:0]const u8) !Tokenizer {
+        return initOptions(dict_path, false);
+    }
+
+    pub fn initOptions(dict_path: ?[*:0]const u8, preserve_whitespace: bool) !Tokenizer {
         var cfg: c.NxConfig = std.mem.zeroes(c.NxConfig);
         cfg.dict_path = dict_path;
+        cfg.preserve_whitespace = if (preserve_whitespace) 1 else 0;
         var engine: ?*c.NxEngine = null;
         if (c.nx_engine_new(&cfg, &engine) != c.NX_OK) return error.Nexaloid;
         return .{ .engine = engine.? };

@@ -39,6 +39,7 @@ pub enum NxMode {
     Accurate = 0,
     Full = 1,
     Search = 2,
+    RecallSearch = 3,
 }
 
 #[repr(C)]
@@ -49,7 +50,8 @@ pub struct NxConfig {
     pub enable_hmm: u32,
     pub enable_normalization: u32,
     pub enable_plugins: u32,
-    pub reserved: [u32; 8],
+    pub preserve_whitespace: u32,
+    pub reserved: [u32; 7],
 }
 
 impl Default for NxConfig {
@@ -60,7 +62,8 @@ impl Default for NxConfig {
             enable_hmm: 0,
             enable_normalization: 0,
             enable_plugins: 0,
-            reserved: [0; 8],
+            preserve_whitespace: 0,
+            reserved: [0; 7],
         }
     }
 }

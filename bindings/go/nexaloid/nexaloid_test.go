@@ -21,6 +21,34 @@ func TestTokenize(t *testing.T) {
 	}
 }
 
+func TestPreserveWhitespace(t *testing.T) {
+	tokenizer, err := New("../../../data/dict/nexaloid.tsv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered, err := tokenizer.Tokenize("文档 秒", Accurate)
+	tokenizer.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tokenTexts(filtered); !sameStrings(got, []string{"文档", "秒"}) {
+		t.Fatalf("unexpected default whitespace tokens: %#v", got)
+	}
+
+	tokenizer, err = NewWithOptions(Options{DictPath: "../../../data/dict/nexaloid.tsv", PreserveWhitespace: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tokenizer.Close()
+	preserved, err := tokenizer.Tokenize("文档 秒", Accurate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tokenTexts(preserved); !sameStrings(got, []string{"文档", " ", "秒"}) {
+		t.Fatalf("unexpected preserved whitespace tokens: %#v", got)
+	}
+}
+
 func TestRegressionCases(t *testing.T) {
 	tokenizer, err := New("../../../data/dict/nexaloid.tsv")
 	if err != nil {
@@ -55,6 +83,21 @@ func TestRegressionCases(t *testing.T) {
 		if !contains(got, word) {
 			t.Fatalf("missing %q in %#v", word, got)
 		}
+	}
+
+	search, err = tokenizer.Tokenize("研究生命起源", Search)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(tokenTexts(search), "研究生") {
+		t.Fatalf("search emitted cross-boundary noise: %#v", search)
+	}
+	recall, err := tokenizer.Tokenize("研究生命起源", RecallSearch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(tokenTexts(recall), "研究生") {
+		t.Fatalf("recall search missing candidate: %#v", recall)
 	}
 }
 

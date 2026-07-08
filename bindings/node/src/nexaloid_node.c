@@ -95,8 +95,8 @@ static void on_text(const NxToken *token, const char *text, size_t text_len, voi
 }
 
 static napi_value tokenizer_new(napi_env env, napi_callback_info info) {
-  size_t argc = 1;
-  napi_value args[1];
+  size_t argc = 2;
+  napi_value args[2];
   napi_value self;
   napi_get_cb_info(env, info, &argc, args, &self, NULL);
 
@@ -114,6 +114,11 @@ static napi_value tokenizer_new(napi_env env, napi_callback_info info) {
   if (argc > 0 && get_string_arg(env, args[0], &dict_path, &dict_path_len)) {
     (void)dict_path_len;
     config.dict_path = dict_path;
+  }
+  bool preserve_whitespace = false;
+  if (argc > 1) {
+    napi_get_value_bool(env, args[1], &preserve_whitespace);
+    config.preserve_whitespace = preserve_whitespace ? 1 : 0;
   }
 
   NxStatus status = nx_engine_new(&config, &tokenizer->engine);

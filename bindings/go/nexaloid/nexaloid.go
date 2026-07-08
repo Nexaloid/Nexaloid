@@ -28,9 +28,10 @@ import (
 type Mode int
 
 const (
-	Accurate Mode = C.NX_MODE_ACCURATE
-	Full     Mode = C.NX_MODE_FULL
-	Search   Mode = C.NX_MODE_SEARCH
+	Accurate     Mode = C.NX_MODE_ACCURATE
+	Full         Mode = C.NX_MODE_FULL
+	Search       Mode = C.NX_MODE_SEARCH
+	RecallSearch Mode = C.NX_MODE_RECALL_SEARCH
 )
 
 type Token struct {
@@ -50,13 +51,25 @@ type Tokenizer struct {
 	engine *C.NxEngine
 }
 
+type Options struct {
+	DictPath           string
+	PreserveWhitespace bool
+}
+
 func New(dictPath string) (*Tokenizer, error) {
+	return NewWithOptions(Options{DictPath: dictPath})
+}
+
+func NewWithOptions(options Options) (*Tokenizer, error) {
 	var cfg C.NxConfig
 	var cDict *C.char
-	if dictPath != "" {
-		cDict = C.CString(dictPath)
+	if options.DictPath != "" {
+		cDict = C.CString(options.DictPath)
 		defer C.free(unsafe.Pointer(cDict))
 		cfg.dict_path = cDict
+	}
+	if options.PreserveWhitespace {
+		cfg.preserve_whitespace = 1
 	}
 	var engine *C.NxEngine
 	if status := C.nx_engine_new(&cfg, &engine); status != C.NX_OK {
