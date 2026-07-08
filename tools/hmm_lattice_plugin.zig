@@ -346,9 +346,11 @@ fn mapFileReadOnly(path_z: [*:0]const u8) !MappedFile {
         if (fd < 0) return error.OpenFailed;
         errdefer _ = c.close(fd);
 
-        var stat: c.struct_stat = undefined;
-        if (c.fstat(fd, &stat) != 0 or stat.st_size <= 0) return error.OpenFailed;
-        const size: usize = @intCast(stat.st_size);
+        const end = c.lseek(fd, 0, c.SEEK_END);
+        if (end <= 0) return error.OpenFailed;
+        const end_u: u64 = @intCast(end);
+        if (end_u > std.math.maxInt(usize)) return error.BadArtifact;
+        const size: usize = @intCast(end_u);
         const view = c.mmap(null, size, c.PROT_READ, c.MAP_PRIVATE, fd, 0);
         if (view == c.MAP_FAILED) return error.OpenFailed;
         return .{
