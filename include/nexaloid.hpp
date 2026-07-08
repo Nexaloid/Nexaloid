@@ -15,6 +15,7 @@ enum class Mode {
     Accurate = NX_MODE_ACCURATE,
     Full = NX_MODE_FULL,
     Search = NX_MODE_SEARCH,
+    RecallSearch = NX_MODE_RECALL_SEARCH,
 };
 
 struct Token {
