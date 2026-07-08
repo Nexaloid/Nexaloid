@@ -1,20 +1,22 @@
 # Nexaloid
 
-Nexaloid is a Chinese tokenizer runtime, built in Zig with a stable C ABI and bindings for Python, Node.js, C++, Zig, Go, and Rust.
+[English](README.md) | [中文](README.zh-CN.md)
 
-It is aimed at workloads where correctness, throughput, and cross-language consistency matter: search engines, RAG pipelines, e-commerce catalogs, and text analytics.
+Nexaloid is a Chinese tokenizer runtime. The core is implemented in Zig, exposes a stable C ABI, and ships bindings for Python, Node.js, C++, Zig, Go, and Rust.
+
+It is designed for workloads that need correctness, throughput, and cross-language consistency, such as search engines, RAG pipelines, e-commerce catalogs, and text analytics.
+
+---
 
 ## What Nexaloid Is
 
-- A dictionary-driven Chinese segmentation engine (double-array trie + Viterbi decoder)
-- A conservative search tokenizer that expands the best path, plus an explicit recall-search mode for aggressive candidate expansion
-- An **explainable** tokenizer: every token carries its origin (base dict, user dict, rule, or unknown fallback) and a score
-- A runtime plugin ABI for optional CandidateProvider integrations; the core still runs without plugins
-- Byte- and character-offset-preserving token output through the C ABI and language bindings
+- A dictionary-based Chinese segmentation engine using a double-array trie and Viterbi decoding
+- A conservative **Search** mode: it expands only the Accurate/Viterbi best path; **RecallSearch** is available when you need more aggressive candidate recall over all lattice edges
+- An explainable tokenizer: every token carries source, offsets, and score
+- An optional CandidateProvider plugin ABI; the core runs independently without plugins
+- C ABI and language bindings preserve both UTF-8 byte offsets and Unicode character offsets
 
-## What Nexaloid Is Not
-
-Nexaloid is not a jieba rewrite, a HuggingFace / ONNX binding, a Python-only NLP package, an LLM tokenizer, or a heavy NLP framework. The core has zero Python, PyTorch, or TensorFlow dependencies.
+---
 
 ## Quick Start
 
@@ -24,10 +26,10 @@ Nexaloid is not a jieba rewrite, a HuggingFace / ONNX binding, a Python-only NLP
 from nexaloid import Tokenizer
 
 tokenizer = Tokenizer()
-for token in tokenizer.tokenize("南京市长江大桥"):
+for token in tokenizer.tokenize("武汉市长江大桥"):
     print(token.text, token.start_byte, token.end_byte, token.source, token.score)
 
-# Jieba-compatible API
+# jieba-compatible API
 import nexaloid.compat_jieba as jieba
 print(jieba.lcut("研究生命起源"))
 # ['研究', '生命', '起源']
@@ -35,20 +37,20 @@ print(jieba.lcut("研究生命起源"))
 
 ```powershell
 $env:PYTHONPATH = "$PWD\bindings\python\src"
-python -c "import nexaloid.compat_jieba as jieba; print(jieba.lcut('南京市长江大桥'))"
+python -c "import nexaloid.compat_jieba as jieba; print(jieba.lcut('武汉市长江大桥'))"
 ```
 
 #### jieba API Compatibility
 
-Existing jieba users can keep common jieba function names by changing the import:
+Projects that already use jieba can keep common function names by changing the import:
 
 ```python
 import nexaloid.compat_jieba as jieba
 ```
 
-The adapter exports a module-level tokenizer, like jieba's global API. Current compatible names are `cut`, `lcut`, `cut_for_search`, `lcut_for_search`, `load_userdict`, `add_word`, `del_word`, and `suggest_freq`.
+The currently compatible module-level APIs include `cut`, `lcut`, `cut_for_search`, `lcut_for_search`, `load_userdict`, `add_word`, `del_word`, and `suggest_freq`.
 
-`cut` returns an iterator of strings, `lcut` returns a list, and search mode de-duplicates multi-character search tokens. `cut_for_search` uses conservative `Search` mode, which avoids cross-boundary candidates such as `市长` in `南京市长江大桥`; use native `Mode.RECALL_SEARCH` when you want the older aggressive recall expansion. `load_userdict` accepts jieba-style `word freq tag` text dictionaries; tags, `HMM`, and `use_paddle` are accepted for API shape but ignored by the current adapter. Use `nexaloid.Tokenizer` directly when you need offsets, token source, scores, or batch tokenization.
+`cut` returns an iterator of strings, and `lcut` returns a list. `cut_for_search` uses the conservative `Search` mode, which avoids cross-boundary candidates such as `市长` in `武汉市长江大桥`; use the native `Mode.RECALL_SEARCH` when you need more aggressive recall. `load_userdict` accepts jieba-style `word freq tag` text dictionaries. `tag` and `use_paddle` are accepted only for API-shape compatibility and are currently ignored; `HMM=True` is not ignored, and loads the bundled BMES HMM plugin to recover unknown words. Use `nexaloid.Tokenizer` directly when you need offsets, source, score, or batch tokenization.
 
 ### Node.js
 
@@ -56,8 +58,8 @@ The adapter exports a module-level tokenizer, like jieba's global API. Current c
 const { Tokenizer } = require("@nexaloid/nexaloid");
 
 const tokenizer = new Tokenizer();
-console.log(tokenizer.lcut("南京市长江大桥"));
-// ['南京市', '长江大桥']
+console.log(tokenizer.lcut("武汉市长江大桥"));
+// ['武汉市', '长江大桥']
 tokenizer.close();
 ```
 
@@ -73,9 +75,9 @@ npm run test:binding
 #include <nexaloid.hpp>
 
 NxConfig cfg{};
-cfg.dict_path = "data/dict/nexaloid.tsv";
+cfg.dict_path = "data/dict/nexaloid.tsv";   // .nxdict is also supported
 nexaloid::Tokenizer tokenizer(cfg);
-for (const auto& word : tokenizer.cut("南京市长江大桥"))
+for (const auto& word : tokenizer.cut("武汉市长江大桥"))
     std::cout << word << "\n";
 ```
 
@@ -84,7 +86,7 @@ for (const auto& word : tokenizer.cut("南京市长江大桥"))
 ```go
 tokenizer, _ := nexaloid.New("data/dict/nexaloid.tsv")
 defer tokenizer.Close()
-tokens, _ := tokenizer.Tokenize("南京市长江大桥", nexaloid.Accurate)
+tokens, _ := tokenizer.Tokenize("武汉市长江大桥", nexaloid.Accurate)
 ```
 
 ### Rust
@@ -93,21 +95,25 @@ tokens, _ := tokenizer.Tokenize("南京市长江大桥", nexaloid.Accurate)
 use nexaloid::{Mode, Tokenizer};
 
 let tokenizer = Tokenizer::new_default()?;
-let tokens = tokenizer.tokenize("南京市长江大桥", Mode::Accurate)?;
+let tokens = tokenizer.tokenize("武汉市长江大桥", Mode::Accurate)?;
 ```
+
+---
 
 ## Tokenization Modes
 
 | Mode | Behavior |
 |------|----------|
-| **Accurate** | Viterbi shortest-path decoding; filters pure whitespace tokens unless `preserve_whitespace` is enabled |
-| **Search** | Emits best-path tokens plus Han 2-gram / 3-gram expansions; avoids cross-boundary semantic noise |
-| **RecallSearch** | Emits all explicit non-unknown candidate edges plus Han 2-gram / 3-gram expansions for maximum recall |
-| **Full** | Reserved for API compatibility; behaves like Accurate in v0.1 |
+| **Accurate** | Viterbi shortest-path decoding; pure whitespace tokens are filtered by default, unless `preserve_whitespace` is enabled |
+| **Search** | Runs Accurate first, then expands tokens on the best path with Han 2-gram / 3-gram tokens; avoids cross-boundary semantic noise |
+| **RecallSearch** | Does not depend on the best path; expands all lattice candidate edges with Han 2-gram / 3-gram tokens for maximum recall |
+| **Full** | Kept for compatibility with jieba's `cut_all` / full-mode API shape; in the current version it behaves exactly like Accurate |
+
+---
 
 ## Whitespace
 
-Nexaloid filters pure whitespace tokens by default, which is usually better for search and RAG pipelines. Enable whitespace preservation when you need jieba-like source-shape retention:
+Nexaloid filters pure whitespace tokens by default, which is usually better for search and RAG pipelines. Enable whitespace preservation when you need to reconstruct the input shape; spaces, tabs, newlines, full-width spaces, and similar spans are emitted as standalone tokens:
 
 ```python
 tokenizer = Tokenizer(preserve_whitespace=True)
@@ -115,19 +121,53 @@ print(tokenizer.lcut("中文 English\t混排\n第二行"))
 # ['中文', ' ', 'English', '\t', '混排', '\n', '第二行']
 ```
 
-The same switch is exposed through `NxConfig.preserve_whitespace` in the C ABI and through each language binding's constructor/options wrapper.
+The same switch is exposed through `NxConfig.preserve_whitespace` in the C ABI and through constructor options in each language binding.
+
+---
+
+## Default Dictionary and Formats
+
+The core engine supports both the text format (`.tsv`) and the binary packed-trie format (`.nxdict`).
+`.nxdict` is compact, about 38 MiB, loads quickly, and can be memory-mapped on Windows. `.tsv` must be parsed and inserted line by line, so startup is slower; it is mainly useful for development and debugging. Use `.nxdict` in production.
+
+Default constructor behavior by binding:
+
+| Language | Default dictionary behavior |
+|----------|-----------------------------|
+| **Python** | `Tokenizer()` first looks for packaged `nexaloid.nxdict`, then falls back to `.tsv` |
+| **Node.js** | `new Tokenizer()` loads `data/dict/nexaloid.tsv` by default |
+| **Rust** | `Tokenizer::new_default()` loads the bundled `nexaloid.nxdict` |
+| **C++** | `Tokenizer(NxConfig{})` does not auto-load a dictionary; set `dict_path` explicitly |
+| **Go** | `New("")` does not auto-load a dictionary; pass a path or use `NewWithOptions` |
+
+---
 
 ## Built-in Rule Configuration
 
-The rule matcher protects structured tokens such as URLs, email addresses, ISO timestamps, Windows paths, IPv6 addresses, number+unit spans, market-day terms like `T+3日`, and mixed ASCII terms such as `GPT-5.5`.
+The rule matcher adds candidates for structured tokens such as URLs, email addresses, ISO timestamps, Windows paths, IPv6 addresses, number-unit spans, market-day expressions such as `T+3日`, and mixed ASCII terms such as `GPT-5.5`. Built-in rules are enabled by default.
 
-Rules are enabled by default. Python can disable a built-in rule or override scores:
+### Configurable Built-in Rules
+
+| Rule name | Example | Default score |
+|-----------|---------|---------------|
+| `url` | `https://example.com/path` | 300.0 |
+| `email` | `user@example.com` | 300.0 |
+| `timestamp` | `2025-03-15T10:30:00` | 300.0 |
+| `windows_path` | `C:\Users\name\file.txt` | 300.0 |
+| `ipv6` | `::1`, `2001:db8::1` | 300.0 |
+| `number_unit` | `100mg`, `5%` | 300.0 |
+| `market_day` | `T+3日`, `T-1日` | 300.0 |
+| `ascii_term` | `onnxruntime-gpu`, `GPT-5.5` | 3.0 |
+
+Scores are internal decoder weights, not strict probabilities. During Viterbi decoding, each candidate edge's `score` is added directly to the path base score. A high score such as 300.0 strongly protects structured tokens from being split, while a low score such as 3.0 for `ascii_term` can still lose to higher-scoring dictionary entries.
+
+### Configuration Example
 
 ```python
 from nexaloid import Tokenizer
 
 tokenizer = Tokenizer(rule_config={
-    "ascii_term": False,
+    "ascii_term": False,        # Disable the ascii_term rule
     "scores": {
         "url": 120.0,
         "email": 120.0,
@@ -135,21 +175,28 @@ tokenizer = Tokenizer(rule_config={
 })
 ```
 
-Supported rule names are:
+> Rule configuration only controls candidates generated by rules. Entries from the base or user dictionary can still cover the same span and keep their own source. For example, if `GPT-5.5` already exists in the dictionary, the final token may have `source=base_dict` even though the `ascii_term` rule can also propose the same span.
 
-```text
-url, email, timestamp, windows_path, ipv6, number_unit, market_day, ascii_term
-```
+---
 
-Default scores are `300.0` for structured rules and `3.0` for `ascii_term`. Lower a score when the rule should lose more often to dictionary candidates; disable a rule when that token shape is noise for your domain.
+## Custom Rules
 
-Custom rules are loaded as JSON and parsed by the Zig core, not by language bindings. V4 supports six structured rule kinds:
+Custom rules are defined as JSON, parsed by the Zig core, and behave consistently across all language bindings.
 
-```text
-prefixed_number, charset_span, ascii_chain, number_unit, literal_sequence, contains_span
-```
+### Supported Rule Kinds
+
+| Kind | Description | Example |
+|------|-------------|---------|
+| `prefixed_number` | Prefix + digits | `SH600519` |
+| `charset_span` | Continuous span constrained to a charset | Uppercase alphanumeric SKU |
+| `ascii_chain` | Constrained charset span that must contain specified substrings | `onnxruntime-gpu` |
+| `number_unit` | Number + unit | `50mg`, `10%` |
+| `literal_sequence` | Ordered sequence of literals, numbers, or charset spans | `T+3日`-style expressions |
+| `contains_span` | Left boundary + middle charset span + right boundary | Domain-specific wrapped formats |
 
 Common fields are `name`, `kind`, `score`, `enabled`, and `boundary`. `boundary` accepts `none`, `ascii`, or `ascii_or_han`.
+
+### JSON Rule Example
 
 ```json
 {
@@ -189,88 +236,114 @@ Common fields are `name`, `kind`, `score`, `enabled`, and `boundary`. `boundary`
 }
 ```
 
-```python
-tokenizer.load_rules_json(rules_json)
-tokenizer.load_rules("rules.json")
-tokenizer.clear_rules()
-```
+### Loading APIs
 
-Node.js, C++, Zig, Go, and Rust expose the same `loadRulesJson` / `load_rules_json` / `LoadRulesJSON` style wrappers; C users call `nx_load_rules_json` directly. All wrappers pass JSON through to core so matching behavior stays identical across languages.
+| Function | Description |
+|----------|-------------|
+| `load_rules_json(json_str)` | Load rules from a JSON string |
+| `load_rules(file_path)` | Load rules from a JSON file |
+| `clear_rules()` | Clear all custom rules |
 
-Audit custom rules against expected and rejected tokens:
+All bindings (C, Node.js, C++, Zig, Go, Rust) expose equivalent functions and pass JSON through to the core unchanged, keeping matching behavior consistent.
+
+### Custom Rule Token Flags
+
+For tokens produced by custom rules, the `flags` field stores the **1-based index in the JSON rules array**. The first rule has index 1. This index applies only to custom rules and does not include built-in rules. Disabled rules still occupy their array position, so indexes remain stable for auditing and debugging.
+
+### Audit Tool
 
 ```powershell
 python tools/rule_audit.py data/rules/v4_sample_rules.json data/badcases/rules_v4.json
 ```
 
+---
+
 ## Architecture
 
-```
+```text
 UTF-8 text
-  → Scanner (codepoints + byte/char offsets + class)
-  → Dictionary Matcher (double-array trie walk + overlay trie)
-  → Rule Matcher (mixed ASCII terms such as GPT-5.5 and onnxruntime-gpu)
-  → CandidateProvider Plugins (optional HMM/NER/domain candidates)
-  → Lattice (all candidate edges from dict/rule/plugin/unknown sources)
-  → Viterbi Decoder (globally best path)
-  → Token Stream (filtered, offset-preserving)
+  -> Scanner (codepoints + byte/char offsets + class)
+  -> Dictionary Matcher (double-array trie traversal + overlay trie)
+  -> Rule Matcher (built-in/custom rules)
+  -> CandidateProvider Plugins (optional HMM/NER/domain candidates)
+  -> Lattice (all candidate edges from dict/rule/plugin/unknown sources)
+  -> Viterbi Decoder (globally best path)
+  -> Token Stream (filtering, offset preservation)
 ```
 
-The core is a single Zig library (`libnexaloid`). Language bindings call the C ABI and do not reimplement tokenizer logic. Runtime loading is implemented for CandidateProvider plugins; other plugin hook kinds are reserved.
+The core is a single Zig library, `libnexaloid`. All language bindings call the C ABI and do not reimplement tokenization logic. Runtime plugins currently support only CandidateProvider; the other hook kinds are reserved ABI surface.
 
-Matcher code is split by responsibility:
+### Core Source Files
 
 | File | Responsibility |
 |------|----------------|
-| `core/src/matcher/rule_matcher.zig` | Public rule matcher facade and built-in/custom rule orchestration |
-| `core/src/matcher/rule_config.zig` | Rule IDs, score defaults, and enabled-rule masks |
-| `core/src/matcher/builtin_rules.zig` | Built-in structured token rules such as URL, email, IPv6, timestamp, and ASCII terms |
-| `core/src/matcher/custom_rules.zig` | Public custom-rule facade |
-| `core/src/matcher/custom_rule_types.zig` | Shared custom-rule structs and limits |
-| `core/src/matcher/custom_rule_parser.zig` | JSON parsing for custom rules |
-| `core/src/matcher/custom_rule_matcher.zig` | Runtime matching for parsed custom rules |
+| `core/src/matcher/rule_matcher.zig` | Rule matcher facade and built-in/custom rule orchestration |
+| `core/src/matcher/rule_config.zig` | Rule IDs, default scores, enabled masks |
+| `core/src/matcher/builtin_rules.zig` | Built-in structured rules for URL, email, IPv6, and similar tokens |
+| `core/src/matcher/custom_rules.zig` | Custom rule facade |
+| `core/src/matcher/custom_rule_types.zig` | Shared custom-rule structures and limits |
+| `core/src/matcher/custom_rule_parser.zig` | Custom-rule JSON parsing |
+| `core/src/matcher/custom_rule_matcher.zig` | Custom-rule runtime matching |
+
+---
 
 ## Features
 
 ### Dictionary System
 
-- **Base dictionary**: about 349k words, stored as a double-array trie; NXDICT base dictionaries can be memory-mapped on Windows
-- **User dictionary**: runtime overlay trie, loaded from TSV or binary NXDICT format
-- **Domain overlay**: loaded through the same user-dictionary overlay path via `NxConfig.user_dict_path`
-- **Binary format (NXDICT)**: compact packed trie; the current bundled dictionary is about 38 MiB
+| Feature | Description |
+|---------|-------------|
+| Base dictionary | About 349k words, double-array trie; can be memory-mapped on Windows |
+| User dictionary | Runtime overlay trie, supports TSV or binary NXDICT |
+| Domain overlay | Loaded through `NxConfig.user_dict_path` and handled by the same overlay path |
+| NXDICT binary | Compact packed trie, about 38 MiB, fast loading, mmap-capable |
 
 ### Performance
 
-- **Batch tokenization**: native worker threads with in-order callback emission
-- **Segmented long-input processing**: inputs split on sentence boundaries (newline, period, exclamation, CJK punctuation) into ≤512-char chunks
-- **Lattice indexed by start character**: O(1) edge lookup per position
-- **Thread model**: concurrent tokenization on one engine is allowed; do not call `nx_add_word` or `nx_reload_user_dict` while that same engine is tokenizing
+| Feature | Description |
+|---------|-------------|
+| Batch tokenization | Parallel worker threads; callbacks/results are strictly emitted in input-array order, while token order within each input is unchanged |
+| Long-text segmentation | Splits on sentence boundaries into chunks of at most 512 characters |
+| Lattice index | O(1) candidate edge lookup by start character |
+| Thread model | The same engine can tokenize concurrently; do not call `nx_add_word` or `nx_reload_user_dict` while tokenization is running on that engine |
 
 ### Cross-Language Consistency
 
-All bindings call the same core tokenizer. Token text and offsets should match across bindings for the same input and dictionary.
+All bindings call the same core engine. With the same input and dictionary, token text and offsets should match exactly across languages.
 
 ### Plugin ABI
 
-`core/include/nexaloid_plugin.h` defines 8 hook kinds: candidate provider, boundary scorer, edge scorer, token filter, token expander, POS tagger, entity recognizer, and normalizer. The current runtime loads CandidateProvider plugins through `nx_load_plugin`; unsupported kinds are rejected. Plugins stream char-offset candidates into the lattice, and the core maps them back to byte offsets before Viterbi decoding.
+`core/include/nexaloid_plugin.h` defines eight hook interfaces. Only CandidateProvider is currently available; the others are reserved.
 
-### HMM Artifact
+| Hook kind | ID | Description | Status |
+|-----------|----|-------------|--------|
+| Candidate Provider | 1 | Inject extra candidate edges into the lattice | Implemented |
+| Boundary Scorer | 2 | Adjust boundary weights | Reserved |
+| Edge Scorer | 3 | Adjust edge weights | Reserved |
+| Token Filter | 4 | Filter tokens | Reserved |
+| Token Expander | 5 | Expand tokens | Reserved |
+| POS Tagger | 6 | Part-of-speech tagging | Reserved |
+| Entity Recognizer | 7 | Entity recognition | Reserved |
+| Normalizer | 8 | Text normalization | Reserved |
 
-An optional BMES HMM lattice artifact is bundled at:
+Plugins are loaded through `nx_load_plugin`. They write candidates into the lattice using character offsets, and the core maps those offsets back to byte offsets before Viterbi decoding.
+
+### HMM Plugin
+
+The optional BMES HMM lattice artifact is located at:
 
 ```text
 data/hmm/bmes_hmm_wordhub_lattice.nxhmm
 data/hmm/bmes_hmm_wordhub_lattice.manifest.json
 ```
 
-This artifact is produced by the `NexaloidHMM` project and consumed by the optional HMM CandidateProvider plugin. It is packaged with Python, Node.js, Rust, and native SDK releases; HMM remains opt-in at the binding layer.
+This artifact is produced by the `NexaloidHMM` project and consumed by the HMM CandidateProvider plugin. It is packaged with Python, Node.js, Rust, and native SDK releases, and remains opt-in at the binding layer.
 
-Bindings expose the bundled artifact path for plugin configuration:
+Bindings expose the bundled artifact path:
 
 ```python
-from nexaloid import hmm_artifact_path
+from nexaloid import hmm_artifact_path, hmm_manifest
 print(hmm_artifact_path())
-from nexaloid import hmm_manifest
 print(hmm_manifest()["quality"]["lattice_heldout"]["token_f1"])
 ```
 
@@ -284,15 +357,34 @@ console.log(hmmManifest().quality.lattice_heldout.token_f1);
 println!("{}", nexaloid::bundled_hmm_artifact_path().display());
 ```
 
-The optional HMM plugin accepts either the artifact path directly or JSON config:
+HMM plugin configuration example, accepting either an artifact path or JSON:
 
 ```json
 {"artifact":"data/hmm/bmes_hmm_wordhub_lattice.nxhmm","hmm_score":-14.0}
 ```
 
-`tools/hmm_score_audit.py` gates the default score against hand-picked risk cases, WordHub-derived runtime cases, and structured-token probes for URLs, email, ISO timestamps, Windows paths, addresses, and medical terms. In the current audit, `-20` under-recognizes unknown words, while `-8` starts over-merging examples such as `并参与`.
+`hmm_score` is an empirical weight used directly as the candidate edge score during Viterbi decoding. It is added with rule scores and dictionary log-probabilities, and controls the merge strength for unknown words. The default value, -14.0, is audited with manually selected risk cases, WordHub cases, and structured-token probes (`tools/hmm_score_audit.py`) to balance recall and segmentation precision.
+
+---
 
 ## C ABI
+
+All exported functions use the `nx_` prefix. The main header is `core/include/nexaloid.h`.
+
+| Function | Purpose |
+|----------|---------|
+| `nx_engine_new` | Create an engine instance |
+| `nx_engine_free` | Destroy an engine |
+| `nx_tokenize` | Tokenize one input |
+| `nx_tokenize_batch` | Batch tokenization with configurable thread count |
+| `nx_add_word` | Add a word dynamically at runtime |
+| `nx_reload_user_dict` | Reload the user dictionary |
+| `nx_set_rule_config` | Set built-in rule enable masks and scores |
+| `nx_load_rules_json` | Load custom rules from JSON |
+| `nx_clear_rules` | Clear all custom rules |
+| `nx_load_plugin` | Load a dynamic plugin |
+
+Detailed declarations:
 
 ```c
 NxStatus nx_engine_new(const NxConfig *config, NxEngine **out_engine);
@@ -315,59 +407,68 @@ NxStatus  nx_load_plugin(NxEngine *engine, const char *plugin_path,
                          const char *config_json);
 ```
 
-`enabled_mask` uses `1u << NxRuleId`; pass `NX_RULE_ALL_MASK` for defaults. `scores` may be `NULL`, or an array in `NxRuleId` order.
+`enabled_mask` uses `1u << NxRuleId`; pass `NX_RULE_ALL_MASK` for defaults. `scores` may be `NULL`, or an array ordered by `NxRuleId`.
 
 Headers: `core/include/nexaloid.h`, `core/include/nexaloid_plugin.h`
 
+---
+
 ## Token Output
 
-Every token includes:
+Every token contains these fields:
 
 | Field | Description |
 |-------|-------------|
-| `text` | The matched substring |
+| `text` | Matched substring |
 | `start_byte` / `end_byte` | UTF-8 byte offsets in the original input |
 | `start_char` / `end_char` | Unicode codepoint offsets |
-| `word_id` | Dictionary word ID (0 for unknown / rule tokens) |
-| `pos_id` | POS tag ID (reserved, unresolved in v0.1) |
+| `word_id` | Dictionary word ID; 0 for unknown and rule tokens |
+| `pos_id` | POS ID, reserved and unresolved in v0.1 |
 | `source` | Origin: `base_dict`, `user_dict`, `rule`, `unknown`, or `plugin`; `domain_dict` is reserved |
-| `flags` | Extra metadata; custom rule tokens use a 1-based rule index for audit tooling |
-| `score` | Decoder score (higher is better; log-probability for dict tokens) |
+| `flags` | Extra metadata; for custom-rule tokens, `flags` is the 1-based index in the JSON rules array |
+| `score` | Internal decoder weight; higher is better. Scores from different sources are added directly and are not forced into a single probability scale |
+
+---
 
 ## Dictionary Management
 
-Build the base dictionary from jieba's `dict.txt` plus a custom overlay. The command auto-detects an installed `jieba` package; otherwise pass `--jieba-dict path\to\dict.txt`.
-`data/dict/demote.tsv` lowers scores for noisy base words before `overlay.tsv` applies manual boosts.
+### Build the Base Dictionary
 
 ```powershell
 python tools/dict_builder.py --out data/dict/nexaloid.tsv
 ```
 
-Compile to the packed NXDICT binary format. Windows base-dictionary loading can mmap this format.
+The command auto-detects an installed `jieba` package; otherwise pass `--jieba-dict` with a `dict.txt` path. `data/dict/demote.tsv` lowers noisy base-word scores before `overlay.tsv` applies manual weighting.
+
+### Compile Binary NXDICT
 
 ```powershell
 python tools/nxdict_builder.py data/dict/nexaloid.tsv data/dict/nexaloid.nxdict
 ```
 
-Validate the overlay dictionary:
+### Validate Overlay
 
 ```powershell
 python tools/validate_overlay.py data/dict/overlay.tsv
 ```
 
-Import reviewed dictionary products from `NexaloidData` into generated base candidates. This does not modify the default dictionary. Raw domain dictionaries are skipped by default because they need separate review before use.
+### Maintainer Flow: Import NexaloidData
+
+> Normal users do not need this step. It is used to import reviewed candidate entries from the external `NexaloidData` repository.
 
 ```powershell
 python tools/import_nexaloid_data.py --data-root F:\Code\03_OpenCode\NexaloidData
 python tools/validate_overlay.py data/dict/generated/overlay.generated.tsv
 ```
 
+---
+
 ## Development
 
 ```powershell
 cd core
-rtk zig build          # compile the shared library
-rtk zig build test     # run core tests
+zig build          # Build the shared library
+zig build test     # Run core tests
 cd ..
 
 # Python regression tests
@@ -379,7 +480,7 @@ python tools\benchmark.py
 # Windows: Go tests need the native DLL on PATH
 $env:PATH = "$PWD\core\zig-out\bin;$env:PATH"
 cd bindings\go
-rtk go test ./nexaloid
+go test ./nexaloid
 ```
 
 ## Benchmark
@@ -388,6 +489,8 @@ rtk go test ./nexaloid
 $env:PYTHONPATH = "$PWD\bindings\python\src"
 python tools\benchmark.py -n 1000
 ```
+
+---
 
 ## Language Bindings
 
@@ -401,13 +504,27 @@ python tools\benchmark.py -n 1000
 | Go | `bindings/go/` | cgo binding |
 | Rust | `bindings/rust/` | safe wrapper + `-sys` crate |
 
-C, C++, and Zig users can consume language-specific native SDK zip files attached to GitHub Releases:
+### Using the Native SDK (C / C++ / Zig)
 
-- `nexaloid-c-<version>-<platform>.zip`
-- `nexaloid-cpp-<version>-<platform>.zip`
-- `nexaloid-zig-<version>-<platform>.zip`
-- `nexaloid-<version>-<platform>.zip` remains the combined native SDK
+1. Check out the matching release branch: `release/c`, `release/cpp`, or `release/zig`
+2. Download the zip for the same version and platform from [GitHub Releases](https://github.com/Nexaloid/Nexaloid/releases)
+3. Extract it, then copy the zip's `lib/` directory into the root of your cloned checkout
+4. Build and run the examples
 
-Native SDK assets are built for `linux-x64`, `windows-x64`, `darwin-x64`, `darwin-arm64`, `linux-arm64`, `windows-arm64`, `linux-musl`, `linux-armv7`, and `riscv64`. Each SDK contains headers, the platform native library, examples, and `data/dict/nexaloid.nxdict`.
+Each SDK contains headers, the platform native library, examples, and `data/dict/nexaloid.nxdict`.
 
-Release branches `release/c`, `release/cpp`, and `release/zig` track the latest released language entry files; copy the matching release asset's `lib/` directory into the checkout to run examples. Python and npm packages stay limited to the targets that are built and executed in their package pipelines. Rust uses small target-specific native crates such as `nexaloid-sys-linux-x64` and `nexaloid-sys-darwin-arm64` so Cargo installs can stay below crates.io package size limits.
+### Covered Platforms
+
+| Platform |
+|----------|
+| linux-x64 |
+| windows-x64 |
+| darwin-x64 |
+| darwin-arm64 |
+| linux-arm64 |
+| windows-arm64 |
+| linux-musl |
+| linux-armv7 |
+| riscv64 |
+
+Python and npm packages cover only the platforms that their pipelines actually build and test. Rust uses more granular target-specific native crates, such as `nexaloid-sys-linux-x64`, to stay within crates.io package size limits.
