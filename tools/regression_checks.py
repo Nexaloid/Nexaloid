@@ -202,13 +202,13 @@ def check_python_rule_config() -> None:
         tokens = tokenizer.tokenize("foo_bar-123")
         assert all(token.source != "rule" for token in tokens)
         assert "foo_bar-123" not in [token.text for token in tokens]
-        assert "SH600519" in tokenizer.lcut("买SH600519")
+        assert "SH600519" in tokenizer.lcut("买SH600519", HMM=False)
         tokenizer.clear_rules()
-        assert "SH600519" not in tokenizer.lcut("买SH600519")
+        assert "SH600519" not in tokenizer.lcut("买SH600519", HMM=False)
         tokenizer.load_rules_json(
             '{"version":1,"rules":[{"name":"sku","kind":"charset_span","charset":"A-Z0-9-_","min_len":4,"max_len":16,"score":60}]}'
         )
-        assert "SKU-AB12" in tokenizer.lcut("买SKU-AB12")
+        assert "SKU-AB12" in tokenizer.lcut("买SKU-AB12", HMM=False)
     finally:
         tokenizer.close()
 
