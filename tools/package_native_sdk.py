@@ -47,8 +47,8 @@ def copy(src: Path, dst: Path) -> None:
 def copy_hmm(root: Path) -> None:
     src = ROOT / "data" / "hmm"
     for name in (
-        "bmes_hmm_wordhub_lattice.json",
-        "bmes_hmm_wordhub_lattice.json.sha256",
+        "bmes_hmm_wordhub_lattice.nxhmm",
+        "bmes_hmm_wordhub_lattice.nxhmm.sha256",
         "bmes_hmm_wordhub_lattice.manifest.json",
     ):
         copy(src / name, root / "data" / "hmm" / name)
@@ -119,8 +119,8 @@ Platform: {platform}
 - `examples/`: language regression examples
 
 Set the runtime library path to `lib/` before running examples.
-If `lib/` contains `nexaloid_plugin_hmm_lattice.*`, load it with `data/hmm/bmes_hmm_wordhub_lattice.json` as the plugin config path.
-For score calibration, pass JSON such as `{{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.json","hmm_score":-14.0}}`.
+If `lib/` contains `nexaloid_plugin_hmm_lattice.*`, load it with `data/hmm/bmes_hmm_wordhub_lattice.nxhmm` as the plugin config path.
+For score calibration, pass JSON such as `{{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.nxhmm","hmm_score":-14.0}}`.
 """,
     )
 

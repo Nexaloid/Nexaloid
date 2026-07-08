@@ -246,7 +246,7 @@ def check_python_hmm_artifact_path() -> None:
     from nexaloid import hmm_artifact_path, hmm_manifest, hmm_manifest_path
 
     path = hmm_artifact_path()
-    assert path == ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.json"
+    assert path == ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.nxhmm"
     assert path.exists()
     assert hmm_manifest_path() == ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.manifest.json"
     manifest = hmm_manifest()
@@ -281,7 +281,7 @@ def check_python_hmm_true_enabled() -> None:
 
 
 def check_rust_sys_hmm_artifact_synced() -> None:
-    root_artifact = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.json"
+    root_artifact = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.nxhmm"
     rust_artifact = ROOT / "bindings" / "rust" / "nexaloid-sys" / "data" / "hmm" / root_artifact.name
     assert hashlib.sha256(root_artifact.read_bytes()).digest() == hashlib.sha256(rust_artifact.read_bytes()).digest()
 

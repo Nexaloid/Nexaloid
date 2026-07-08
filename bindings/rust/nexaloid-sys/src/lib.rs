@@ -12,7 +12,7 @@ pub fn bundled_hmm_artifact_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("data")
         .join("hmm")
-        .join("bmes_hmm_wordhub_lattice.json")
+        .join("bmes_hmm_wordhub_lattice.nxhmm")
 }
 
 #[repr(C)]

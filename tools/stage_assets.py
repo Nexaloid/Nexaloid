@@ -30,8 +30,8 @@ def copy_hmm(dst: Path) -> None:
     src = ROOT / "data" / "hmm"
     dst.mkdir(parents=True, exist_ok=True)
     for name in (
-        "bmes_hmm_wordhub_lattice.json",
-        "bmes_hmm_wordhub_lattice.json.sha256",
+        "bmes_hmm_wordhub_lattice.nxhmm",
+        "bmes_hmm_wordhub_lattice.nxhmm.sha256",
         "bmes_hmm_wordhub_lattice.manifest.json",
     ):
         copy_file(src / name, dst / name)

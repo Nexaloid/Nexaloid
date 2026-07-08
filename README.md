@@ -234,13 +234,13 @@ All bindings call the same core tokenizer. Token text and offsets should match a
 An optional BMES HMM lattice artifact is bundled at:
 
 ```text
-data/hmm/bmes_hmm_wordhub_lattice.json
+data/hmm/bmes_hmm_wordhub_lattice.nxhmm
 data/hmm/bmes_hmm_wordhub_lattice.manifest.json
 ```
 
-This artifact is produced by `NexaloidData` and is intended for future plugin/runtime integration. It is packaged with Python, Node.js, Rust, and native SDK releases, but the core tokenizer does not enable HMM by default yet.
+This artifact is produced by the `NexaloidHMM` project and consumed by the optional HMM CandidateProvider plugin. It is packaged with Python, Node.js, Rust, and native SDK releases; HMM remains opt-in at the binding layer.
 
-Bindings expose the bundled artifact path for plugin/runtime experiments:
+Bindings expose the bundled artifact path for plugin configuration:
 
 ```python
 from nexaloid import hmm_artifact_path
@@ -262,7 +262,7 @@ println!("{}", nexaloid::bundled_hmm_artifact_path().display());
 The optional HMM plugin accepts either the artifact path directly or JSON config:
 
 ```json
-{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.json","hmm_score":-14.0}
+{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.nxhmm","hmm_score":-14.0}
 ```
 
 `tools/hmm_score_audit.py` gates the default score against hand-picked risk cases, WordHub-derived runtime cases, and structured-token probes for URLs, email, ISO timestamps, Windows paths, addresses, and medical terms. In the current audit, `-20` under-recognizes unknown words, while `-8` starts over-merging examples such as `并参与`.

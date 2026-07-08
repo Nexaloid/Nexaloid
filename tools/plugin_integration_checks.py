@@ -75,10 +75,7 @@ def assert_plugin_tokenizer(tokenizer: Tokenizer) -> None:
 
 
 def assert_hmm_plugin_tokenizer(plugin_path: Path) -> None:
-    artifact_path = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.json"
-    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
-    assert "阿明" not in artifact["lexicon"]
-    assert "杭算" not in artifact["lexicon"]
+    artifact_path = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.nxhmm"
     tokenizer = Tokenizer(dict_path=plugin_path.parent / "missing.tsv")
     try:
         tokenizer.load_plugin(plugin_path, str(artifact_path))

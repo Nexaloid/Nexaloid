@@ -55,7 +55,7 @@ def load_cases() -> list[tuple[str, list[str]]]:
 
 
 def run_score(plugin_path: Path, score: float) -> tuple[int, list[str]]:
-    artifact = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.json"
+    artifact = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.nxhmm"
     tokenizer = Tokenizer()
     failures: list[str] = []
     cases = load_cases()
