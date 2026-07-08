@@ -63,6 +63,21 @@ def check_python_close_guard() -> None:
     expect_error(lambda: tokenizer.load_userdict("missing.tsv"), "closed")
 
 
+def check_python_hmm_default_off() -> None:
+    old_plugin = os.environ.get("NEXALOID_HMM_PLUGIN")
+    os.environ["NEXALOID_HMM_PLUGIN"] = str(ROOT / "missing_hmm_plugin.so")
+    tokenizer = Tokenizer()
+    try:
+        assert tokenizer.lcut("小明硕士毕业") == tokenizer.lcut("小明硕士毕业", HMM=False)
+        assert "小明" not in list(tokenizer.cut_for_search("小明硕士毕业"))
+    finally:
+        tokenizer.close()
+        if old_plugin is None:
+            os.environ.pop("NEXALOID_HMM_PLUGIN", None)
+        else:
+            os.environ["NEXALOID_HMM_PLUGIN"] = old_plugin
+
+
 def check_invalid_mode() -> None:
     tokenizer = Tokenizer()
     try:
@@ -287,6 +302,7 @@ def main() -> int:
     os.environ.setdefault("PYTHONUTF8", "1")
     checks = [
         check_python_close_guard,
+        check_python_hmm_default_off,
         check_invalid_mode,
         check_nxdict_userdict,
         check_del_word_falls_back,

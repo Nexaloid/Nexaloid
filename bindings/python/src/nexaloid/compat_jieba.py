@@ -6,21 +6,21 @@ from .tokenizer import Tokenizer
 dt = Tokenizer()
 
 
-def cut(sentence, cut_all=False, HMM=True, use_paddle=False):
+def cut(sentence, cut_all=False, HMM=False, use_paddle=False):
     del use_paddle
     return dt.cut(sentence, cut_all=cut_all, HMM=HMM)
 
 
-def lcut(sentence, cut_all=False, HMM=True, use_paddle=False):
+def lcut(sentence, cut_all=False, HMM=False, use_paddle=False):
     del use_paddle
     return dt.lcut(sentence, cut_all=cut_all, HMM=HMM)
 
 
-def cut_for_search(sentence, HMM=True):
+def cut_for_search(sentence, HMM=False):
     return dt.cut_for_search(sentence, HMM=HMM)
 
 
-def lcut_for_search(sentence, HMM=True):
+def lcut_for_search(sentence, HMM=False):
     return list(cut_for_search(sentence, HMM=HMM))
 
 

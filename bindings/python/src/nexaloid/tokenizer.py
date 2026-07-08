@@ -596,14 +596,14 @@ class Tokenizer:
             i += 1
         return out
 
-    def cut(self, text: str, cut_all: bool = False, HMM: bool = True):
+    def cut(self, text: str, cut_all: bool = False, HMM: bool = False):
         mode = Mode.FULL if cut_all else Mode.ACCURATE
         yield from self._token_texts(text, mode, HMM=HMM)
 
-    def lcut(self, text: str, cut_all: bool = False, HMM: bool = True) -> list[str]:
+    def lcut(self, text: str, cut_all: bool = False, HMM: bool = False) -> list[str]:
         return self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE, HMM=HMM)
 
-    def cut_for_search(self, text: str, HMM: bool = True):
+    def cut_for_search(self, text: str, HMM: bool = False):
         seen: set[str] = set()
         for word in self._token_texts(text, Mode.SEARCH, HMM=False):
             if len(word) <= 1:
