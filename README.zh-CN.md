@@ -302,10 +302,10 @@ UTF-8 text
 
 | 特性 | 说明 |
 |------|------|
-| 批量分词 | 多线程并行，回调严格保证按输入数组顺序输出，每条输入内 token 顺序不变 |
+| 批量分词 | 仅在未加载插件时使用多线程并行。加载任意插件（包括 HMM CandidateProvider）后，当前会串行执行，因为插件 ABI 尚未约定线程安全；回调仍严格按输入数组顺序输出，每条输入内 token 顺序不变 |
 | 长文本分段 | 按句子边界切分为不超过 512 字符的片段 |
 | lattice 索引 | 按起始字符 O(1) 查找候选边 |
-| 线程模型 | 同一 engine 可并发分词；分词期间不要调用 `nx_add_word` 或 `nx_reload_user_dict` |
+| 线程模型 | 未加载插件时，同一 engine 可并发分词；加载插件后，除非所有插件都明确保证线程安全，否则调用方应自行串行化，因为插件 ABI 不提供该保证。分词期间不要调用 `nx_add_word` 或 `nx_reload_user_dict` |
 
 ### 跨语言一致性
 
@@ -363,7 +363,23 @@ HMM 插件配置示例（接受 artifact 路径或 JSON）：
 {"artifact":"data/hmm/bmes_hmm_wordhub_lattice.nxhmm","hmm_score":-14.0}
 ```
 
-`hmm_score` 是经验权重，直接作为候选边分数参与 Viterbi 解码（与规则分数、词典 log‑probability 直接相加），用于控制未知词合并强度。默认值 -14.0 经过人工风险用例、WordHub 用例及结构化 token 探针审计（`tools/hmm_score_audit.py`），在召回与切分精度间取得平衡。
+`hmm_score` 是经验权重，直接作为候选边分数参与 Viterbi 解码（与规则分数、词典 log-probability 直接相加），用于控制未知词合并强度。默认值 -14.0 经过人工风险用例、WordHub 用例及结构化 token 探针审计（`tools/hmm_score_audit.py`），在召回与切分精度间取得平衡。
+
+### 实体 BMES 插件（开发版）
+
+`tools/entity_bmes_plugin.zig` 是面向实体名词的模型型 CandidateProvider。它通过 mmap 加载独立 `NexaloidBMES` 项目产出的 `.nxbmes` artifact，使用带字符、字符类别和 gazetteer 哈希特征的 O/B/M/E/S 平均感知机解码器，可以提出基础词典中不存在的实体候选，默认仍为显式启用。
+
+```powershell
+zig build-lib -dynamic -lc --name nexaloid_plugin_entity_bmes tools/entity_bmes_plugin.zig
+```
+
+加载插件时可直接传入 artifact 路径，也可使用 JSON 配置：
+
+```json
+{"artifact":"entity_bmes_perceptron.nxbmes","score_per_char":60.0,"edge_penalty":10.0,"min_chars":2,"max_chars":64,"flags":4}
+```
+
+候选分数为 `score_per_char * 字符数 - edge_penalty`。ASCII 实体要求 ASCII 边界；输出 token 的 `source=plugin`，`flags` 默认为 `4`，与 HMM 插件使用的 `1`/`2` 不冲突。当前训练 artifact 的上游数据许可尚未满足公开商业发布要求，因此主仓库不会将其打入发行包，使用时需显式提供本地 artifact。未来完成清权的模型会按固定版本和 SHA-256 拉取，并作为独立的 `nexaloid-entity-bmes-<version>.zip` 发行附件发布。与其他插件相同，加载后批量分词当前会串行执行。
 
 ---
 

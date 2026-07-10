@@ -39,6 +39,14 @@ def hmm_plugin_name() -> str:
     return "nexaloid_plugin_hmm_lattice.so"
 
 
+def entity_plugin_name() -> str:
+    if sys.platform == "win32":
+        return "nexaloid_plugin_entity_bmes.dll"
+    if sys.platform == "darwin":
+        return "nexaloid_plugin_entity_bmes.dylib"
+    return "nexaloid_plugin_entity_bmes.so"
+
+
 def build_plugin(out_path: Path) -> None:
     subprocess.run(
         [
@@ -64,6 +72,20 @@ def build_hmm_plugin(out_path: Path) -> None:
             "-lc",
             f"-femit-bin={out_path}",
             str(ROOT / "tools" / "hmm_lattice_plugin.zig"),
+        ],
+        check=True,
+    )
+
+
+def build_entity_plugin(out_path: Path) -> None:
+    subprocess.run(
+        [
+            "zig",
+            "build-lib",
+            "-dynamic",
+            "-lc",
+            f"-femit-bin={out_path}",
+            str(ROOT / "tools" / "entity_bmes_plugin.zig"),
         ],
         check=True,
     )
@@ -100,6 +122,48 @@ def assert_hmm_plugin_tokenizer(plugin_path: Path) -> None:
         tokenizer.close()
 
 
+def assert_entity_plugin_tokenizer(plugin_path: Path, artifact_path: Path) -> None:
+    tokenizer = Tokenizer(dict_path=plugin_path.parent / "missing.tsv")
+    try:
+        tokenizer.load_plugin(plugin_path, json.dumps({"artifact": str(artifact_path)}))
+        for text, expected in (
+            ("患者服用阿司匹林治疗冠心病。", "阿司匹林"),
+            ("苹果公司发布iPhone 16 Pro", "iPhone 16 Pro"),
+            ("该系统采用Transformer和CUDA加速。", "Transformer"),
+        ):
+            entities = [
+                token.text
+                for token in tokenizer.tokenize(text)
+                if token.source == "plugin" and token.flags == 4
+            ]
+            assert expected in entities, (text, entities)
+    finally:
+        tokenizer.close()
+
+
+def assert_entity_hmm_coexist(
+    entity_plugin_path: Path,
+    entity_artifact_path: Path,
+    hmm_plugin_path: Path,
+) -> None:
+    tokenizer = Tokenizer(dict_path=entity_plugin_path.parent / "missing.tsv")
+    try:
+        tokenizer.load_plugin(
+            hmm_plugin_path,
+            str(ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.nxhmm"),
+        )
+        tokenizer.load_plugin(entity_plugin_path, str(entity_artifact_path))
+        tokens = tokenizer.tokenize("苹果公司发布iPhone 16 Pro")
+        assert ("苹果", "plugin", 1) in [
+            (token.text, token.source, token.flags) for token in tokens
+        ]
+        assert ("iPhone 16 Pro", "plugin", 4) in [
+            (token.text, token.source, token.flags) for token in tokens
+        ]
+    finally:
+        tokenizer.close()
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -129,6 +193,20 @@ def main() -> int:
         hmm_plugin_path = tmp_path / hmm_plugin_name()
         build_hmm_plugin(hmm_plugin_path)
         assert_hmm_plugin_tokenizer(hmm_plugin_path)
+
+        entity_plugin_path = tmp_path / entity_plugin_name()
+        build_entity_plugin(entity_plugin_path)
+        entity_artifact = Path(
+            os.environ.get(
+                "NEXALOID_ENTITY_BMES_ARTIFACT",
+                ROOT / "data" / "entity" / "entity_bmes_perceptron.nxbmes",
+            )
+        )
+        if entity_artifact.exists():
+            assert_entity_plugin_tokenizer(entity_plugin_path, entity_artifact)
+            assert_entity_hmm_coexist(entity_plugin_path, entity_artifact, hmm_plugin_path)
+        else:
+            print("entity BMES artifact not present; inference checks skipped")
 
     print("plugin integration checks passed")
     return 0

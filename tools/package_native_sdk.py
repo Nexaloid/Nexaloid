@@ -90,6 +90,7 @@ def copy_language_files(language: str, root: Path) -> None:
 
     if language in ("all", "c", "cpp", "zig"):
         copy(ROOT / "tools" / "hmm_lattice_plugin.zig", root / "plugins" / "hmm_lattice_plugin.zig")
+        copy(ROOT / "tools" / "entity_bmes_plugin.zig", root / "plugins" / "entity_bmes_plugin.zig")
 
 
 def write_package_readme(root: Path, version: str, platform: str, language: str) -> None:
@@ -116,11 +117,13 @@ Platform: {platform}
 - `data/dict/nexaloid.nxdict`: bundled dictionary
 - `data/hmm/`: optional BMES HMM lattice artifact and manifest
 - `plugins/hmm_lattice_plugin.zig`: optional BMES HMM CandidateProvider plugin source
+- `plugins/entity_bmes_plugin.zig`: optional entity BMES CandidateProvider plugin source
 - `examples/`: language regression examples
 
 Set the runtime library path to `lib/` before running examples.
 If `lib/` contains `nexaloid_plugin_hmm_lattice.*`, load it with `data/hmm/bmes_hmm_wordhub_lattice.nxhmm` as the plugin config path.
 For score calibration, pass JSON such as `{{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.nxhmm","hmm_score":-14.0}}`.
+Cleared entity models are published as separate `nexaloid-entity-bmes-<version>.zip` release assets and are never fetched implicitly.
 """,
     )
 

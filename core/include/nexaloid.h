@@ -144,8 +144,9 @@ NxStatus nx_clear_rules(NxEngine *engine);
 NxStatus nx_load_plugin(NxEngine *engine, const char *plugin_path, const char *config_json);
 
 /* Tokenize one UTF-8 byte slice. text does not need to be NUL-terminated.
-   Concurrent tokenization on one engine is allowed; do not call nx_add_word or
-   nx_reload_user_dict concurrently with tokenization on the same engine. */
+   Concurrent tokenization on one engine is allowed when no plugins are loaded.
+   With plugins, callers must serialize unless every plugin documents thread
+   safety. Do not mutate the engine concurrently with tokenization. */
 NxStatus nx_tokenize(
     NxEngine *engine,
     const char *text,
@@ -155,7 +156,9 @@ NxStatus nx_tokenize(
     void *user_data
 );
 
-/* Tokenize a batch. thread_count 0 lets core choose based on CPU count. */
+/* Tokenize a batch. thread_count 0 lets core choose based on CPU count.
+   Loading any plugin currently forces one worker because plugin thread safety
+   is not part of the ABI. */
 NxStatus nx_tokenize_batch(
     NxEngine *engine,
     const char *const *texts,

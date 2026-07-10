@@ -1,4 +1,5 @@
 .zig-cache/
+.codegraph/
 zig-out/
 bindings/node/build/
 bindings/node/data/
@@ -13,6 +14,7 @@ bindings/rust/nexaloid-sys-*/native/
 bindings/rust/**/target/
 data/dict/generated/*
 !data/dict/generated/traditional.generated.tsv
+data/entity/entity_bmes_perceptron.*
 **/__pycache__/
 *.pyc
 *.pdb

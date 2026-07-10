@@ -559,23 +559,7 @@ class Tokenizer:
     def _token_texts(self, text: str, mode: Mode, HMM: bool = False) -> list[str]:
         if HMM and mode == Mode.ACCURATE:
             return self._hmm_overlay_texts(text)
-        self._ensure_open()
-        engine = self._engine_for_hmm(HMM)
-        data = text.encode("utf-8")
-        out: list[str] = []
-
-        @_CALLBACK
-        def on_token(token_ptr, text_ptr, text_len, user_data):
-            del text_ptr, text_len, user_data
-            token = token_ptr.contents
-            part = data[token.start_byte : token.end_byte].decode("utf-8")
-            if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
-                out.extend(part)
-                return
-            out.append(part)
-
-        self._check(_LIB.nx_tokenize(engine, data, len(data), int(mode), on_token, None))
-        return out
+        return [token.text for token in self._tokenize_with_engine(self._engine_for_hmm(HMM), text, mode)]
 
     def _hmm_overlay_texts(self, text: str) -> list[str]:
         base = self._tokenize_with_engine(self._engine, text, Mode.ACCURATE)

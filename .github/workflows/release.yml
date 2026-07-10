@@ -23,6 +23,14 @@ on:
         description: "Publish GitHub native SDK assets"
         type: boolean
         default: true
+      entity_bmes_version:
+        description: "Optional cleared NexaloidBMES release, for example v0.1.0"
+        required: false
+        type: string
+      entity_bmes_sha256:
+        description: "Pinned SHA-256 for the optional BMES model"
+        required: false
+        type: string
   push:
     tags:
       - "v*"
@@ -240,6 +248,9 @@ jobs:
     needs: native-sdk-build
     permissions:
       contents: write
+    env:
+      ENTITY_BMES_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.entity_bmes_version || (github.event_name != 'workflow_dispatch' && vars.ENTITY_BMES_VERSION) }}
+      ENTITY_BMES_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.entity_bmes_sha256 || (github.event_name != 'workflow_dispatch' && vars.ENTITY_BMES_SHA256) }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -249,6 +260,17 @@ jobs:
           pattern: native-sdk-*
           path: dist/native
           merge-multiple: true
+      - name: Fetch verified entity BMES model
+        if: env.ENTITY_BMES_VERSION != '' || env.ENTITY_BMES_SHA256 != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -n "$ENTITY_BMES_VERSION" && test -n "$ENTITY_BMES_SHA256" || { echo "Both ENTITY_BMES_VERSION and ENTITY_BMES_SHA256 are required" >&2; exit 1; }
+          version="${ENTITY_BMES_VERSION#v}"
+          python3 tools/fetch_entity_bmes_release.py \
+            --version "$ENTITY_BMES_VERSION" \
+            --expected-sha256 "$ENTITY_BMES_SHA256" \
+            --out "dist/native/nexaloid-entity-bmes-$version.zip"
       - name: Upload assets
         env:
           GH_TOKEN: ${{ github.token }}

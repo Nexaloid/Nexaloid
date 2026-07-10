@@ -302,10 +302,10 @@ The core is a single Zig library, `libnexaloid`. All language bindings call the 
 
 | Feature | Description |
 |---------|-------------|
-| Batch tokenization | Parallel worker threads; callbacks/results are strictly emitted in input-array order, while token order within each input is unchanged |
+| Batch tokenization | Uses parallel worker threads only when no plugins are loaded. Loading any plugin, including the HMM CandidateProvider, currently serializes batch work because plugin thread safety is not part of the ABI. Callbacks/results are still emitted in input-array order, while token order within each input is unchanged |
 | Long-text segmentation | Splits on sentence boundaries into chunks of at most 512 characters |
 | Lattice index | O(1) candidate edge lookup by start character |
-| Thread model | The same engine can tokenize concurrently; do not call `nx_add_word` or `nx_reload_user_dict` while tokenization is running on that engine |
+| Thread model | Without plugins, the same engine can tokenize concurrently. With plugins, callers must serialize calls unless every loaded plugin documents its own thread safety; the plugin ABI does not guarantee it. Do not call `nx_add_word` or `nx_reload_user_dict` while tokenization is running on that engine |
 
 ### Cross-Language Consistency
 
@@ -364,6 +364,22 @@ HMM plugin configuration example, accepting either an artifact path or JSON:
 ```
 
 `hmm_score` is an empirical weight used directly as the candidate edge score during Viterbi decoding. It is added with rule scores and dictionary log-probabilities, and controls the merge strength for unknown words. The default value, -14.0, is audited with manually selected risk cases, WordHub cases, and structured-token probes (`tools/hmm_score_audit.py`) to balance recall and segmentation precision.
+
+### Entity BMES Plugin (Development)
+
+`tools/entity_bmes_plugin.zig` is a model-backed CandidateProvider for entity nouns. It memory-maps a `.nxbmes` artifact produced by the separate `NexaloidBMES` project and runs an O/B/M/E/S averaged-perceptron decoder with hashed character, character-class, and gazetteer features. It remains opt-in and can propose entities that are absent from the base dictionary.
+
+```powershell
+zig build-lib -dynamic -lc --name nexaloid_plugin_entity_bmes tools/entity_bmes_plugin.zig
+```
+
+Load the plugin with either an artifact path or JSON configuration:
+
+```json
+{"artifact":"entity_bmes_perceptron.nxbmes","score_per_char":60.0,"edge_penalty":10.0,"min_chars":2,"max_chars":64,"flags":4}
+```
+
+Candidate scores are `score_per_char * character_length - edge_penalty`. ASCII entities require ASCII boundaries; emitted tokens use `source=plugin`, and `flags` defaults to `4` so it does not overlap the HMM plugin's `1`/`2` values. The current trained artifact is not bundled because its upstream data licenses are not cleared for public commercial release; supply a local artifact explicitly. Future cleared models are fetched by pinned version and SHA-256 and published as separate `nexaloid-entity-bmes-<version>.zip` release assets. As with every loaded plugin, batch tokenization is currently serialized.
 
 ---
 

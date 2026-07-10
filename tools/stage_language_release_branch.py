@@ -41,6 +41,7 @@ def stage(language: str, version: str, out_dir: Path) -> None:
     copy(ROOT / "data" / "dict" / "nexaloid.nxdict", out_dir / "data" / "dict" / "nexaloid.nxdict")
     copy_hmm(out_dir)
     copy(ROOT / "tools" / "hmm_lattice_plugin.zig", out_dir / "plugins" / "hmm_lattice_plugin.zig")
+    copy(ROOT / "tools" / "entity_bmes_plugin.zig", out_dir / "plugins" / "entity_bmes_plugin.zig")
 
     if language == "c":
         copy(ROOT / "bindings" / "c" / "tests" / "regression.c", out_dir / "examples" / "regression.c")
@@ -74,8 +75,10 @@ Download the matching `nexaloid-{language}-<version>-<platform>.zip` asset from 
 The dictionary is bundled at `data/dict/nexaloid.nxdict`.
 The optional BMES HMM lattice artifact is bundled at `data/hmm/bmes_hmm_wordhub_lattice.nxhmm`.
 The optional HMM CandidateProvider plugin source is bundled at `plugins/hmm_lattice_plugin.zig`.
+The optional entity CandidateProvider plugin source is bundled at `plugins/entity_bmes_plugin.zig`.
 Matching release assets include a prebuilt `lib/nexaloid_plugin_hmm_lattice.*` when available.
 Use the artifact path directly as plugin config, or pass JSON like `{{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.nxhmm","hmm_score":-14.0}}` to calibrate HMM candidate weight.
+Cleared entity models are published separately as pinned `nexaloid-entity-bmes-<version>.zip` release assets.
 """,
     )
 
