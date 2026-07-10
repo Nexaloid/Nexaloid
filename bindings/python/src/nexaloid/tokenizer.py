@@ -88,12 +88,16 @@ _RULE_DEFAULT_SCORES = [300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 3.0]
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _DICT_DIR = _PACKAGE_DIR / "data" / "dict"
 _HMM_DIR = _PACKAGE_DIR / "data" / "hmm"
+_ENTITY_DIR = _PACKAGE_DIR / "data" / "entity"
 _REPO_DICT_DIR = Path(__file__).resolve().parents[4] / "data" / "dict"
 _REPO_HMM_DIR = Path(__file__).resolve().parents[4] / "data" / "hmm"
+_REPO_ENTITY_DIR = Path(__file__).resolve().parents[4] / "data" / "entity"
 _BUILT_DICT = _DICT_DIR / "nexaloid.nxdict"
 _BUILT_TEXT_DICT = _DICT_DIR / "nexaloid.tsv"
 _HMM_ARTIFACT = "bmes_hmm_wordhub_lattice.nxhmm"
 _HMM_MANIFEST = "bmes_hmm_wordhub_lattice.manifest.json"
+_ENTITY_ARTIFACT = "entity_bmes_perceptron.nxbmes"
+_ENTITY_MANIFEST = "entity_bmes_perceptron.manifest.json"
 _DELETED_WORD_SCORE = -1_000_000.0
 _MAX_HMM_SEARCH_CHARS = 256
 _MAX_HMM_SEARCH_CACHE = 1024
@@ -133,6 +137,24 @@ def hmm_manifest() -> dict:
     return json.loads(hmm_manifest_path().read_text(encoding="utf-8"))
 
 
+def entity_artifact_path() -> Path:
+    repo_artifact = _REPO_ENTITY_DIR / _ENTITY_ARTIFACT
+    if repo_artifact.exists():
+        return repo_artifact
+    return _ENTITY_DIR / _ENTITY_ARTIFACT
+
+
+def entity_manifest_path() -> Path:
+    repo_manifest = _REPO_ENTITY_DIR / _ENTITY_MANIFEST
+    if repo_manifest.exists():
+        return repo_manifest
+    return _ENTITY_DIR / _ENTITY_MANIFEST
+
+
+def entity_manifest() -> dict:
+    return json.loads(entity_manifest_path().read_text(encoding="utf-8"))
+
+
 def _resolve_domain_dict_path(domain: str | None) -> Path | None:
     if domain is None:
         return None
@@ -164,11 +186,36 @@ def _hmm_plugin_name() -> str:
     return "nexaloid_plugin_hmm_lattice.so"
 
 
+def _entity_plugin_name() -> str:
+    if sys.platform == "win32":
+        return "nexaloid_plugin_entity_bmes.dll"
+    if sys.platform == "darwin":
+        return "nexaloid_plugin_entity_bmes.dylib"
+    return "nexaloid_plugin_entity_bmes.so"
+
+
 def _resolve_hmm_plugin_path() -> Path:
     explicit = os.environ.get("NEXALOID_HMM_PLUGIN")
     if explicit:
         return Path(explicit)
     name = _hmm_plugin_name()
+    root = Path(__file__).resolve().parents[4]
+    candidates = [
+        _PACKAGE_DIR / "native" / name,
+        root / "core" / "zig-out" / "lib" / name,
+        root / "core" / "zig-out" / "bin" / name,
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
+
+
+def entity_plugin_path() -> Path:
+    explicit = os.environ.get("NEXALOID_ENTITY_BMES_PLUGIN")
+    if explicit:
+        return Path(explicit)
+    name = _entity_plugin_name()
     root = Path(__file__).resolve().parents[4]
     candidates = [
         _PACKAGE_DIR / "native" / name,

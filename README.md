@@ -365,21 +365,36 @@ HMM plugin configuration example, accepting either an artifact path or JSON:
 
 `hmm_score` is an empirical weight used directly as the candidate edge score during Viterbi decoding. It is added with rule scores and dictionary log-probabilities, and controls the merge strength for unknown words. The default value, -14.0, is audited with manually selected risk cases, WordHub cases, and structured-token probes (`tools/hmm_score_audit.py`) to balance recall and segmentation precision.
 
-### Entity BMES Plugin (Development)
+### Entity BMES Plugin
 
 `tools/entity_bmes_plugin.zig` is a model-backed CandidateProvider for entity nouns. It memory-maps a `.nxbmes` artifact produced by the separate `NexaloidBMES` project and runs an O/B/M/E/S averaged-perceptron decoder with hashed character, character-class, and gazetteer features. It remains opt-in and can propose entities that are absent from the base dictionary.
 
+Source checkouts can build and stage the native plugin after building the core library:
+
 ```powershell
-zig build-lib -dynamic -lc --name nexaloid_plugin_entity_bmes tools/entity_bmes_plugin.zig
+python tools/stage_assets.py
 ```
 
 Load the plugin with either an artifact path or JSON configuration:
 
 ```json
-{"artifact":"entity_bmes_perceptron.nxbmes","score_per_char":60.0,"edge_penalty":10.0,"min_chars":2,"max_chars":64,"flags":4}
+{"artifact":"data/entity/entity_bmes_perceptron.nxbmes","score_per_char":60.0,"edge_penalty":10.0,"min_chars":2,"max_chars":64,"flags":4}
 ```
 
-Candidate scores are `score_per_char * character_length - edge_penalty`. ASCII entities require ASCII boundaries; emitted tokens use `source=plugin`, and `flags` defaults to `4` so it does not overlap the HMM plugin's `1`/`2` values. The current trained artifact is not bundled because its upstream data licenses are not cleared for public commercial release; supply a local artifact explicitly. Future cleared models are fetched by pinned version and SHA-256 and published as separate `nexaloid-entity-bmes-<version>.zip` release assets. As with every loaded plugin, batch tokenization is currently serialized.
+Python packages expose both bundled paths:
+
+```python
+import json
+from nexaloid import Tokenizer, entity_artifact_path, entity_plugin_path
+
+tokenizer = Tokenizer()
+tokenizer.load_plugin(
+    entity_plugin_path(),
+    json.dumps({"artifact": str(entity_artifact_path())}),
+)
+```
+
+Candidate scores are `score_per_char * character_length - edge_penalty`. ASCII entities require ASCII boundaries; emitted tokens use `source=plugin`, and `flags` defaults to `4` so it does not overlap the HMM plugin's `1`/`2` values. The bundled release-safe model is trained from THUOCL (MIT), JD comments (Apache-2.0), and deterministic synthetic examples; its manifest reports dev F1 `0.793487` and test F1 `0.864987`. As with every loaded plugin, batch tokenization is currently serialized.
 
 ---
 

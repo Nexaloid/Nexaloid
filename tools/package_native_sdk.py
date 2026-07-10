@@ -24,17 +24,23 @@ def native_libs(platform: str) -> list[Path]:
     return libs
 
 
-def plugin_lib_name(platform: str) -> str:
+def plugin_lib_names(platform: str) -> tuple[str, str]:
     if platform.startswith("windows-"):
-        return "nexaloid_plugin_hmm_lattice.dll"
-    if platform.startswith("darwin-"):
-        return "nexaloid_plugin_hmm_lattice.dylib"
-    return "nexaloid_plugin_hmm_lattice.so"
+        suffix = ".dll"
+    elif platform.startswith("darwin-"):
+        suffix = ".dylib"
+    else:
+        suffix = ".so"
+    return tuple(f"nexaloid_plugin_{stem}{suffix}" for stem in ("hmm_lattice", "entity_bmes"))
 
 
 def native_plugins(platform: str) -> list[Path]:
-    name = plugin_lib_name(platform)
-    return [path for path in (ROOT / "core" / "zig-out").rglob(name)]
+    out = []
+    for name in plugin_lib_names(platform):
+        matches = list((ROOT / "core" / "zig-out").rglob(name))
+        if matches:
+            out.append(matches[0])
+    return out
 
 
 def copy(src: Path, dst: Path) -> None:
@@ -52,6 +58,19 @@ def copy_hmm(root: Path) -> None:
         "bmes_hmm_wordhub_lattice.manifest.json",
     ):
         copy(src / name, root / "data" / "hmm" / name)
+
+
+def copy_entity(root: Path) -> None:
+    src = ROOT / "data" / "entity"
+    for name in (
+        "entity_bmes_perceptron.nxbmes",
+        "entity_bmes_perceptron.nxbmes.sha256",
+        "entity_bmes_perceptron.manifest.json",
+        "APACHE-2.0.txt",
+        "MODEL_LICENSE.txt",
+        "THIRD_PARTY_NOTICES.txt",
+    ):
+        copy(src / name, root / "data" / "entity" / name)
 
 
 def zip_dir(src: Path, out: Path) -> None:
@@ -116,6 +135,7 @@ Platform: {platform}
 - `lib/`: platform native library files
 - `data/dict/nexaloid.nxdict`: bundled dictionary
 - `data/hmm/`: optional BMES HMM lattice artifact and manifest
+- `data/entity/`: bundled release-safe entity BMES artifact, manifest, and notices
 - `plugins/hmm_lattice_plugin.zig`: optional BMES HMM CandidateProvider plugin source
 - `plugins/entity_bmes_plugin.zig`: optional entity BMES CandidateProvider plugin source
 - `examples/`: language regression examples
@@ -123,7 +143,7 @@ Platform: {platform}
 Set the runtime library path to `lib/` before running examples.
 If `lib/` contains `nexaloid_plugin_hmm_lattice.*`, load it with `data/hmm/bmes_hmm_wordhub_lattice.nxhmm` as the plugin config path.
 For score calibration, pass JSON such as `{{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.nxhmm","hmm_score":-14.0}}`.
-Cleared entity models are published as separate `nexaloid-entity-bmes-<version>.zip` release assets and are never fetched implicitly.
+Load `lib/nexaloid_plugin_entity_bmes.*` and pass `data/entity/entity_bmes_perceptron.nxbmes` as its config path.
 """,
     )
 
@@ -137,6 +157,7 @@ def package(version: str, platform: str, out_dir: Path, language: str) -> Path:
         copy_language_files(language, root)
         copy(ROOT / "data" / "dict" / "nexaloid.nxdict", root / "data" / "dict" / "nexaloid.nxdict")
         copy_hmm(root)
+        copy_entity(root)
         for lib in native_libs(platform):
             copy(lib, root / "lib" / lib.name)
         for plugin in native_plugins(platform):

@@ -286,6 +286,27 @@ def check_bundled_hmm_artifact() -> None:
     assert check_hmm_artifact_main() == 0
 
 
+def check_python_entity_artifact_path() -> None:
+    from nexaloid import (
+        entity_artifact_path,
+        entity_manifest,
+        entity_manifest_path,
+        entity_plugin_path,
+    )
+
+    assert entity_artifact_path() == ROOT / "data" / "entity" / "entity_bmes_perceptron.nxbmes"
+    assert entity_manifest_path() == ROOT / "data" / "entity" / "entity_bmes_perceptron.manifest.json"
+    manifest = entity_manifest()
+    assert manifest["distribution"] == {"license_spdx": "Apache-2.0", "scope": "public"}
+    assert manifest["quality"]["test"]["f1"] >= 0.86
+    digest = hashlib.sha256(entity_artifact_path().read_bytes()).hexdigest()
+    expected = entity_artifact_path().with_suffix(".nxbmes.sha256").read_text(encoding="utf-8").split()[0]
+    assert digest == expected == manifest["artifact_sha256"]
+    assert "Distribution: public" in (ROOT / "data" / "entity" / "MODEL_LICENSE.txt").read_text(encoding="utf-8")
+    assert "Apache License" in (ROOT / "data" / "entity" / "APACHE-2.0.txt").read_text(encoding="utf-8")
+    assert entity_plugin_path().name.startswith("nexaloid_plugin_entity_bmes")
+
+
 def check_python_hmm_true_enabled() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_path = Path(tmp) / hmm_plugin_name()
@@ -311,6 +332,12 @@ def check_python_hmm_true_enabled() -> None:
 def check_rust_sys_hmm_artifact_synced() -> None:
     root_artifact = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.nxhmm"
     rust_artifact = ROOT / "bindings" / "rust" / "nexaloid-sys" / "data" / "hmm" / root_artifact.name
+    assert hashlib.sha256(root_artifact.read_bytes()).digest() == hashlib.sha256(rust_artifact.read_bytes()).digest()
+
+
+def check_rust_entity_artifact_synced() -> None:
+    root_artifact = ROOT / "data" / "entity" / "entity_bmes_perceptron.nxbmes"
+    rust_artifact = ROOT / "bindings" / "rust" / "nexaloid" / "data" / "entity" / root_artifact.name
     assert hashlib.sha256(root_artifact.read_bytes()).digest() == hashlib.sha256(rust_artifact.read_bytes()).digest()
 
 
@@ -344,8 +371,10 @@ def main() -> int:
         check_repo_dict_preferred,
         check_python_hmm_artifact_path,
         check_bundled_hmm_artifact,
+        check_python_entity_artifact_path,
         check_python_hmm_true_enabled,
         check_rust_sys_hmm_artifact_synced,
+        check_rust_entity_artifact_synced,
         check_plugin_integration,
         check_hmm_score_audit,
         check_rule_audit,

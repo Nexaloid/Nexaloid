@@ -25,6 +25,24 @@ const packagedHmmManifest = path.join(__dirname, "data", "hmm", hmmManifestName)
 const repoHmmManifest = path.join(root, "data", "hmm", hmmManifestName);
 const hmmArtifactPath = fs.existsSync(repoHmmArtifact) ? repoHmmArtifact : packagedHmmArtifact;
 const hmmManifestPath = fs.existsSync(repoHmmManifest) ? repoHmmManifest : packagedHmmManifest;
+const entityArtifactName = "entity_bmes_perceptron.nxbmes";
+const entityManifestName = "entity_bmes_perceptron.manifest.json";
+const packagedEntityArtifact = path.join(__dirname, "data", "entity", entityArtifactName);
+const repoEntityArtifact = path.join(root, "data", "entity", entityArtifactName);
+const packagedEntityManifest = path.join(__dirname, "data", "entity", entityManifestName);
+const repoEntityManifest = path.join(root, "data", "entity", entityManifestName);
+const entityArtifactPath = fs.existsSync(repoEntityArtifact) ? repoEntityArtifact : packagedEntityArtifact;
+const entityManifestPath = fs.existsSync(repoEntityManifest) ? repoEntityManifest : packagedEntityManifest;
+const entityPluginName = process.platform === "win32"
+  ? "nexaloid_plugin_entity_bmes.dll"
+  : process.platform === "darwin"
+    ? "nexaloid_plugin_entity_bmes.dylib"
+    : "nexaloid_plugin_entity_bmes.so";
+const packagedEntityPlugin = path.join(prebuildDir, entityPluginName);
+const repoEntityPlugin = ["bin", "lib"]
+  .map((dir) => path.join(root, "core", "zig-out", dir, entityPluginName))
+  .find((candidate) => fs.existsSync(candidate));
+const entityPluginPath = repoEntityPlugin || packagedEntityPlugin;
 
 // JavaScript stays as a convenience shell; segmentation is implemented by the native addon.
 class Tokenizer extends native.Tokenizer {
@@ -61,6 +79,10 @@ module.exports = {
   hmmArtifactPath,
   hmmManifestPath,
   hmmManifest: () => JSON.parse(fs.readFileSync(hmmManifestPath, "utf8")),
+  entityArtifactPath,
+  entityManifestPath,
+  entityManifest: () => JSON.parse(fs.readFileSync(entityManifestPath, "utf8")),
+  entityPluginPath,
   Mode: {
     ACCURATE: 0,
     FULL: 1,

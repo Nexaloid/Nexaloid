@@ -68,6 +68,8 @@ def build_hmm_plugin(out_path: Path) -> None:
         [
             "zig",
             "build-lib",
+            "-O",
+            "ReleaseFast",
             "-dynamic",
             "-lc",
             f"-femit-bin={out_path}",
@@ -82,6 +84,8 @@ def build_entity_plugin(out_path: Path) -> None:
         [
             "zig",
             "build-lib",
+            "-O",
+            "ReleaseFast",
             "-dynamic",
             "-lc",
             f"-femit-bin={out_path}",
@@ -127,9 +131,10 @@ def assert_entity_plugin_tokenizer(plugin_path: Path, artifact_path: Path) -> No
     try:
         tokenizer.load_plugin(plugin_path, json.dumps({"artifact": str(artifact_path)}))
         for text, expected in (
-            ("患者服用阿司匹林治疗冠心病。", "阿司匹林"),
-            ("苹果公司发布iPhone 16 Pro", "iPhone 16 Pro"),
-            ("该系统采用Transformer和CUDA加速。", "Transformer"),
+            ("阿强加入云海数据研究院", "云海数据研究院"),
+            ("团队计划前往北京开展调研。", "北京"),
+            ("观测人员记录到了梅花鹿。", "梅花鹿"),
+            ("展会上重点介绍了东风本田的配置。", "东风本田"),
         ):
             entities = [
                 token.text
@@ -153,11 +158,11 @@ def assert_entity_hmm_coexist(
             str(ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.nxhmm"),
         )
         tokenizer.load_plugin(entity_plugin_path, str(entity_artifact_path))
-        tokens = tokenizer.tokenize("苹果公司发布iPhone 16 Pro")
-        assert ("苹果", "plugin", 1) in [
+        tokens = tokenizer.tokenize("阿强加入云海数据研究院")
+        assert ("加入", "plugin", 1) in [
             (token.text, token.source, token.flags) for token in tokens
         ]
-        assert ("iPhone 16 Pro", "plugin", 4) in [
+        assert ("云海数据研究院", "plugin", 4) in [
             (token.text, token.source, token.flags) for token in tokens
         ]
     finally:

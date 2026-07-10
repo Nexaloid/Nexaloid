@@ -1,15 +1,9 @@
 # Entity BMES Model
 
-`tools/entity_bmes_plugin.zig` loads `.nxbmes` artifacts produced by the
-separate `NexaloidBMES` training repository.
+`tools/entity_bmes_plugin.zig` loads the bundled `.nxbmes` artifact produced by
+the separate `NexaloidBMES` training repository.
 
-The current trained artifact is intentionally not distributed from this
-public repository because its upstream training and gazetteer licenses are
-not cleared for public commercial release. Once a NexaloidBMES release is
-explicitly cleared, the Nexaloid release workflow can attach it as a separate,
-pinned `nexaloid-entity-bmes-<version>.zip` companion asset. For local checks,
-copy the artifact here or set `NEXALOID_ENTITY_BMES_ARTIFACT` to its path.
-
-Manual releases use the `entity_bmes_version` and `entity_bmes_sha256` inputs.
-Tag releases use the matching `ENTITY_BMES_VERSION` and
-`ENTITY_BMES_SHA256` repository variables. Both values must be present.
+This public model is trained only from THUOCL (MIT), JD comments
+(Apache-2.0), and deterministic synthetic examples. See `APACHE-2.0.txt`,
+`MODEL_LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, and the model manifest for
+exact provenance and quality metrics.

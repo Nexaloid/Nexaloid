@@ -23,14 +23,6 @@ on:
         description: "Publish GitHub native SDK assets"
         type: boolean
         default: true
-      entity_bmes_version:
-        description: "Optional cleared NexaloidBMES release, for example v0.1.0"
-        required: false
-        type: string
-      entity_bmes_sha256:
-        description: "Pinned SHA-256 for the optional BMES model"
-        required: false
-        type: string
   push:
     tags:
       - "v*"
@@ -215,16 +207,23 @@ jobs:
       - name: Build native library
         run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target.zig_target }}
         working-directory: ${{ github.workspace }}/core
-      - name: Build HMM plugin
+      - name: Build plugins
         shell: bash
         run: |
-          rm -f *nexaloid_plugin_hmm_lattice*
-          zig build-lib -dynamic -lc --name nexaloid_plugin_hmm_lattice -target "${{ matrix.target.zig_target }}" tools/hmm_lattice_plugin.zig
+          rm -f *nexaloid_plugin_hmm_lattice* *nexaloid_plugin_entity_bmes*
+          zig build-lib -O ReleaseFast -dynamic -lc --name nexaloid_plugin_hmm_lattice -target "${{ matrix.target.zig_target }}" tools/hmm_lattice_plugin.zig
+          zig build-lib -O ReleaseFast -dynamic -lc --name nexaloid_plugin_entity_bmes -target "${{ matrix.target.zig_target }}" tools/entity_bmes_plugin.zig
           mkdir -p core/zig-out/lib
           case "${{ matrix.target.platform }}" in
-            windows-*) cp nexaloid_plugin_hmm_lattice.dll core/zig-out/lib/nexaloid_plugin_hmm_lattice.dll ;;
-            darwin-*) cp libnexaloid_plugin_hmm_lattice.dylib core/zig-out/lib/nexaloid_plugin_hmm_lattice.dylib ;;
-            *) cp libnexaloid_plugin_hmm_lattice.so core/zig-out/lib/nexaloid_plugin_hmm_lattice.so ;;
+            windows-*) cp nexaloid_plugin_hmm_lattice.dll nexaloid_plugin_entity_bmes.dll core/zig-out/lib/ ;;
+            darwin-*)
+              cp libnexaloid_plugin_hmm_lattice.dylib core/zig-out/lib/nexaloid_plugin_hmm_lattice.dylib
+              cp libnexaloid_plugin_entity_bmes.dylib core/zig-out/lib/nexaloid_plugin_entity_bmes.dylib
+              ;;
+            *)
+              cp libnexaloid_plugin_hmm_lattice.so core/zig-out/lib/nexaloid_plugin_hmm_lattice.so
+              cp libnexaloid_plugin_entity_bmes.so core/zig-out/lib/nexaloid_plugin_entity_bmes.so
+              ;;
           esac
       - name: Package native SDK
         shell: bash
@@ -248,9 +247,6 @@ jobs:
     needs: native-sdk-build
     permissions:
       contents: write
-    env:
-      ENTITY_BMES_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.entity_bmes_version || (github.event_name != 'workflow_dispatch' && vars.ENTITY_BMES_VERSION) }}
-      ENTITY_BMES_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.entity_bmes_sha256 || (github.event_name != 'workflow_dispatch' && vars.ENTITY_BMES_SHA256) }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -260,17 +256,6 @@ jobs:
           pattern: native-sdk-*
           path: dist/native
           merge-multiple: true
-      - name: Fetch verified entity BMES model
-        if: env.ENTITY_BMES_VERSION != '' || env.ENTITY_BMES_SHA256 != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          test -n "$ENTITY_BMES_VERSION" && test -n "$ENTITY_BMES_SHA256" || { echo "Both ENTITY_BMES_VERSION and ENTITY_BMES_SHA256 are required" >&2; exit 1; }
-          version="${ENTITY_BMES_VERSION#v}"
-          python3 tools/fetch_entity_bmes_release.py \
-            --version "$ENTITY_BMES_VERSION" \
-            --expected-sha256 "$ENTITY_BMES_SHA256" \
-            --out "dist/native/nexaloid-entity-bmes-$version.zip"
       - name: Upload assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -362,8 +347,22 @@ jobs:
           version: 0.16.0
       - name: Set release version
         run: python tools/set_release_version.py "${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
-      - name: Stage Cargo dictionary
-        run: python -c "import pathlib, shutil; root=pathlib.Path.cwd(); dst=root/'bindings/rust/nexaloid-sys/data/dict'; dst.mkdir(parents=True, exist_ok=True); shutil.copy2(root/'data/dict/nexaloid.nxdict', dst/'nexaloid.nxdict')"
+      - name: Stage Cargo data
+        run: |
+          python - <<'PY'
+          import pathlib
+          import shutil
+
+          root = pathlib.Path.cwd()
+          dictionary = root / "bindings/rust/nexaloid-sys/data/dict"
+          dictionary.mkdir(parents=True, exist_ok=True)
+          shutil.copy2(root / "data/dict/nexaloid.nxdict", dictionary / "nexaloid.nxdict")
+          shutil.copytree(
+              root / "data/entity",
+              root / "bindings/rust/nexaloid/data/entity",
+              dirs_exist_ok=True,
+          )
+          PY
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal
       - name: Publish platform native crates
@@ -567,8 +566,28 @@ jobs:
           python-version: "3.x"
       - name: Set release version
         run: python ${{ github.workspace }}/tools/set_release_version.py "${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
-      - name: Stage npm dictionary
-        run: python -c "import shutil, pathlib; root=pathlib.Path('${{ github.workspace }}'); dst=root/'bindings/node/data/dict'; dst.mkdir(parents=True, exist_ok=True); [shutil.copy2(root/'data/dict'/n, dst/n) for n in ('nexaloid.tsv', 'nexaloid.nxdict')]"
+      - name: Stage npm data
+        run: |
+          python - <<'PY'
+          import pathlib
+          import shutil
+
+          root = pathlib.Path("${{ github.workspace }}")
+          dictionary = root / "bindings/node/data/dict"
+          dictionary.mkdir(parents=True, exist_ok=True)
+          for name in ("nexaloid.tsv", "nexaloid.nxdict"):
+              shutil.copy2(root / "data/dict" / name, dictionary / name)
+          shutil.copytree(
+              root / "data/hmm",
+              root / "bindings/node/data/hmm",
+              dirs_exist_ok=True,
+          )
+          shutil.copytree(
+              root / "data/entity",
+              root / "bindings/node/data/entity",
+              dirs_exist_ok=True,
+          )
+          PY
         working-directory: ${{ github.workspace }}
       - name: Check npm package contents
         run: npm pack --dry-run

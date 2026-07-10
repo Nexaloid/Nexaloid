@@ -365,21 +365,36 @@ HMM 插件配置示例（接受 artifact 路径或 JSON）：
 
 `hmm_score` 是经验权重，直接作为候选边分数参与 Viterbi 解码（与规则分数、词典 log-probability 直接相加），用于控制未知词合并强度。默认值 -14.0 经过人工风险用例、WordHub 用例及结构化 token 探针审计（`tools/hmm_score_audit.py`），在召回与切分精度间取得平衡。
 
-### 实体 BMES 插件（开发版）
+### 实体 BMES 插件
 
 `tools/entity_bmes_plugin.zig` 是面向实体名词的模型型 CandidateProvider。它通过 mmap 加载独立 `NexaloidBMES` 项目产出的 `.nxbmes` artifact，使用带字符、字符类别和 gazetteer 哈希特征的 O/B/M/E/S 平均感知机解码器，可以提出基础词典中不存在的实体候选，默认仍为显式启用。
 
+源码仓库在核心库构建完成后，可用下面的命令构建并暂存原生插件：
+
 ```powershell
-zig build-lib -dynamic -lc --name nexaloid_plugin_entity_bmes tools/entity_bmes_plugin.zig
+python tools/stage_assets.py
 ```
 
 加载插件时可直接传入 artifact 路径，也可使用 JSON 配置：
 
 ```json
-{"artifact":"entity_bmes_perceptron.nxbmes","score_per_char":60.0,"edge_penalty":10.0,"min_chars":2,"max_chars":64,"flags":4}
+{"artifact":"data/entity/entity_bmes_perceptron.nxbmes","score_per_char":60.0,"edge_penalty":10.0,"min_chars":2,"max_chars":64,"flags":4}
 ```
 
-候选分数为 `score_per_char * 字符数 - edge_penalty`。ASCII 实体要求 ASCII 边界；输出 token 的 `source=plugin`，`flags` 默认为 `4`，与 HMM 插件使用的 `1`/`2` 不冲突。当前训练 artifact 的上游数据许可尚未满足公开商业发布要求，因此主仓库不会将其打入发行包，使用时需显式提供本地 artifact。未来完成清权的模型会按固定版本和 SHA-256 拉取，并作为独立的 `nexaloid-entity-bmes-<version>.zip` 发行附件发布。与其他插件相同，加载后批量分词当前会串行执行。
+Python 包会同时暴露内置模型和插件路径：
+
+```python
+import json
+from nexaloid import Tokenizer, entity_artifact_path, entity_plugin_path
+
+tokenizer = Tokenizer()
+tokenizer.load_plugin(
+    entity_plugin_path(),
+    json.dumps({"artifact": str(entity_artifact_path())}),
+)
+```
+
+候选分数为 `score_per_char * 字符数 - edge_penalty`。ASCII 实体要求 ASCII 边界；输出 token 的 `source=plugin`，`flags` 默认为 `4`，与 HMM 插件使用的 `1`/`2` 不冲突。内置的 release-safe 模型只使用 THUOCL（MIT）、JD 评论（Apache-2.0）和确定性合成样本，manifest 中的 dev F1 为 `0.793487`、test F1 为 `0.864987`。与其他插件相同，加载后批量分词当前会串行执行。
 
 ---
 

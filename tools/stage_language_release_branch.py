@@ -30,6 +30,19 @@ def copy_hmm(out_dir: Path) -> None:
         copy(src / name, out_dir / "data" / "hmm" / name)
 
 
+def copy_entity(out_dir: Path) -> None:
+    src = ROOT / "data" / "entity"
+    for name in (
+        "entity_bmes_perceptron.nxbmes",
+        "entity_bmes_perceptron.nxbmes.sha256",
+        "entity_bmes_perceptron.manifest.json",
+        "APACHE-2.0.txt",
+        "MODEL_LICENSE.txt",
+        "THIRD_PARTY_NOTICES.txt",
+    ):
+        copy(src / name, out_dir / "data" / "entity" / name)
+
+
 def stage(language: str, version: str, out_dir: Path) -> None:
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -40,6 +53,7 @@ def stage(language: str, version: str, out_dir: Path) -> None:
     copy(ROOT / "core" / "include" / "nexaloid_plugin.h", out_dir / "include" / "nexaloid_plugin.h")
     copy(ROOT / "data" / "dict" / "nexaloid.nxdict", out_dir / "data" / "dict" / "nexaloid.nxdict")
     copy_hmm(out_dir)
+    copy_entity(out_dir)
     copy(ROOT / "tools" / "hmm_lattice_plugin.zig", out_dir / "plugins" / "hmm_lattice_plugin.zig")
     copy(ROOT / "tools" / "entity_bmes_plugin.zig", out_dir / "plugins" / "entity_bmes_plugin.zig")
 
@@ -75,10 +89,11 @@ Download the matching `nexaloid-{language}-<version>-<platform>.zip` asset from 
 The dictionary is bundled at `data/dict/nexaloid.nxdict`.
 The optional BMES HMM lattice artifact is bundled at `data/hmm/bmes_hmm_wordhub_lattice.nxhmm`.
 The optional HMM CandidateProvider plugin source is bundled at `plugins/hmm_lattice_plugin.zig`.
-The optional entity CandidateProvider plugin source is bundled at `plugins/entity_bmes_plugin.zig`.
-Matching release assets include a prebuilt `lib/nexaloid_plugin_hmm_lattice.*` when available.
+The entity CandidateProvider plugin source is bundled at `plugins/entity_bmes_plugin.zig`.
+Matching release assets include prebuilt `lib/nexaloid_plugin_hmm_lattice.*` and
+`lib/nexaloid_plugin_entity_bmes.*` libraries when available.
 Use the artifact path directly as plugin config, or pass JSON like `{{"artifact":"data/hmm/bmes_hmm_wordhub_lattice.nxhmm","hmm_score":-14.0}}` to calibrate HMM candidate weight.
-Cleared entity models are published separately as pinned `nexaloid-entity-bmes-<version>.zip` release assets.
+The release-safe entity model is bundled at `data/entity/entity_bmes_perceptron.nxbmes`.
 """,
     )
 
