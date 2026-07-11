@@ -112,6 +112,14 @@ def assert_hmm_plugin_tokenizer(plugin_path: Path) -> None:
         assert [token.text for token in tokenizer.tokenize("小明硕士毕业")] == ["小明", "硕士", "毕业"]
         assert [token.text for token in tokenizer.tokenize("阿明硕士毕业")] == ["阿明", "硕士", "毕业"]
         assert [token.text for token in tokenizer.tokenize("服用二甲双胍500mg")] == ["服用", "二甲双胍", "500mg"]
+        prefixed = tokenizer.tokenize("🙂A服用二甲双胍500mg")
+        metformin = next(token for token in prefixed if token.text == "二甲双胍")
+        assert (
+            metformin.start_byte,
+            metformin.end_byte,
+            metformin.start_char,
+            metformin.end_char,
+        ) == (11, 23, 4, 8)
     finally:
         tokenizer.close()
 
