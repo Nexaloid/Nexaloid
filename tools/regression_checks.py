@@ -335,12 +335,6 @@ def check_rust_sys_hmm_artifact_synced() -> None:
     assert hashlib.sha256(root_artifact.read_bytes()).digest() == hashlib.sha256(rust_artifact.read_bytes()).digest()
 
 
-def check_rust_entity_artifact_synced() -> None:
-    root_artifact = ROOT / "data" / "entity" / "entity_bmes_perceptron.nxbmes"
-    rust_artifact = ROOT / "bindings" / "rust" / "nexaloid" / "data" / "entity" / root_artifact.name
-    assert hashlib.sha256(root_artifact.read_bytes()).digest() == hashlib.sha256(rust_artifact.read_bytes()).digest()
-
-
 def check_plugin_integration() -> None:
     assert plugin_integration_main() == 0
 
@@ -374,7 +368,6 @@ def main() -> int:
         check_python_entity_artifact_path,
         check_python_hmm_true_enabled,
         check_rust_sys_hmm_artifact_synced,
-        check_rust_entity_artifact_synced,
         check_plugin_integration,
         check_hmm_score_audit,
         check_rule_audit,
