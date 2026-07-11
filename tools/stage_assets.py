@@ -103,6 +103,8 @@ def ensure_plugin_libs(target_platform: str | None = None) -> list[Path]:
                 "build-lib",
                 "-O",
                 "ReleaseFast",
+                "-mcpu",
+                "baseline",
                 "-dynamic",
                 "-lc",
                 "--name",

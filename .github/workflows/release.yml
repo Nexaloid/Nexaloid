@@ -211,8 +211,8 @@ jobs:
         shell: bash
         run: |
           rm -f *nexaloid_plugin_hmm_lattice* *nexaloid_plugin_entity_bmes*
-          zig build-lib -O ReleaseFast -dynamic -lc --name nexaloid_plugin_hmm_lattice -target "${{ matrix.target.zig_target }}" tools/hmm_lattice_plugin.zig
-          zig build-lib -O ReleaseFast -dynamic -lc --name nexaloid_plugin_entity_bmes -target "${{ matrix.target.zig_target }}" tools/entity_bmes_plugin.zig
+          zig build-lib -O ReleaseFast -mcpu baseline -dynamic -lc --name nexaloid_plugin_hmm_lattice -target "${{ matrix.target.zig_target }}" tools/hmm_lattice_plugin.zig
+          zig build-lib -O ReleaseFast -mcpu baseline -dynamic -lc --name nexaloid_plugin_entity_bmes -target "${{ matrix.target.zig_target }}" tools/entity_bmes_plugin.zig
           mkdir -p core/zig-out/lib
           case "${{ matrix.target.platform }}" in
             windows-*) cp nexaloid_plugin_hmm_lattice.dll nexaloid_plugin_entity_bmes.dll core/zig-out/lib/ ;;
