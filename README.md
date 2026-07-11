@@ -50,7 +50,7 @@ import nexaloid.compat_jieba as jieba
 
 The currently compatible module-level APIs include `cut`, `lcut`, `cut_for_search`, `lcut_for_search`, `load_userdict`, `add_word`, `del_word`, and `suggest_freq`.
 
-`cut` returns an iterator of strings, and `lcut` returns a list. `cut_for_search` uses the conservative `Search` mode, which avoids cross-boundary candidates such as `市长` in `武汉市长江大桥`; use the native `Mode.RECALL_SEARCH` when you need more aggressive recall. `load_userdict` accepts jieba-style `word freq tag` text dictionaries. `tag` and `use_paddle` are accepted only for API-shape compatibility and are currently ignored; `HMM=True` is not ignored, and loads the bundled BMES HMM plugin to recover unknown words. Use `nexaloid.Tokenizer` directly when you need offsets, source, score, or batch tokenization.
+`cut` returns an iterator of strings, and `lcut` returns a list. `cut_for_search` uses the conservative `Search` mode, which avoids cross-boundary candidates such as `市长` in `武汉市长江大桥`; use the native `Mode.RECALL_SEARCH` when you need more aggressive recall. `load_userdict` accepts jieba-style `word freq tag` text dictionaries. Passing `tag` to `add_word` emits a warning because POS tagging is unavailable, while `use_paddle=True` raises `NotImplementedError`; `HMM=True` loads the bundled BMES HMM plugin to recover unknown words. Use `nexaloid.Tokenizer` directly when you need offsets, source, score, or batch tokenization.
 
 ### Node.js
 

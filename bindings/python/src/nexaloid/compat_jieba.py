@@ -7,12 +7,14 @@ dt = Tokenizer()
 
 
 def cut(sentence, cut_all=False, HMM=False, use_paddle=False):
-    del use_paddle
+    if use_paddle:
+        raise NotImplementedError("use_paddle=True is not supported")
     return dt.cut(sentence, cut_all=cut_all, HMM=HMM)
 
 
 def lcut(sentence, cut_all=False, HMM=False, use_paddle=False):
-    del use_paddle
+    if use_paddle:
+        raise NotImplementedError("use_paddle=True is not supported")
     return dt.lcut(sentence, cut_all=cut_all, HMM=HMM)
 
 

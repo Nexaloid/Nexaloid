@@ -4,6 +4,7 @@ import os
 import sys
 import hashlib
 import tempfile
+import warnings
 from importlib import metadata
 from pathlib import Path
 
@@ -23,6 +24,7 @@ if str(ROOT / "tools") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools"))
 
 from nexaloid import Mode, Tokenizer  # noqa: E402
+import nexaloid.compat_jieba as compat_jieba  # noqa: E402
 from nexaloid.tokenizer import _resolve_dict_path  # noqa: E402
 from nexaloid.tokenizer import NexaloidError  # noqa: E402
 from check_hmm_artifact import main as check_hmm_artifact_main  # noqa: E402
@@ -76,6 +78,18 @@ def check_python_hmm_default_off() -> None:
             os.environ.pop("NEXALOID_HMM_PLUGIN", None)
         else:
             os.environ["NEXALOID_HMM_PLUGIN"] = old_plugin
+
+
+def check_jieba_unsupported_options() -> None:
+    expect_error(lambda: compat_jieba.lcut("南京市长江大桥", use_paddle=True), "use_paddle=True")
+    tokenizer = Tokenizer()
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            tokenizer.add_word("测试专名", tag="nz")
+        assert len(caught) == 1 and "tag is ignored" in str(caught[0].message)
+    finally:
+        tokenizer.close()
 
 
 def check_invalid_mode() -> None:
@@ -319,7 +333,7 @@ def check_python_hmm_true_enabled() -> None:
             assert tokenizer.lcut("小明硕士毕业", HMM=False) == ["小", "明", "硕士", "毕业"]
             assert tokenizer.lcut("小明硕士毕业", HMM=True) == ["小明", "硕士", "毕业"]
             assert list(tokenizer.cut_for_search("南京市长江大桥", HMM=True))[:2] == list(tokenizer.cut_for_search("南京市长江大桥", HMM=False))[:2]
-            assert "小明" in list(tokenizer.cut_for_search("小明硕士毕业", HMM=True))
+            assert list(tokenizer.cut_for_search("小明硕士毕业", HMM=True)) == ["小明", "硕士", "毕业"]
             assert "二甲双胍" in list(tokenizer.cut_for_search("患者服用二甲双胍500mg", HMM=True))
         finally:
             tokenizer.close()
@@ -352,6 +366,7 @@ def main() -> int:
     checks = [
         check_python_close_guard,
         check_python_hmm_default_off,
+        check_jieba_unsupported_options,
         check_invalid_mode,
         check_nxdict_userdict,
         check_del_word_falls_back,

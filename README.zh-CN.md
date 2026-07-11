@@ -50,7 +50,7 @@ import nexaloid.compat_jieba as jieba
 
 当前兼容的模块级 API 包括 `cut`、`lcut`、`cut_for_search`、`lcut_for_search`、`load_userdict`、`add_word`、`del_word` 和 `suggest_freq`。
 
-`cut` 返回字符串迭代器，`lcut` 返回列表。`cut_for_search` 使用保守的 `Search` 模式，会避免如 `武汉市长江大桥` 中 `市长` 这类跨边界候选；需更激进召回时请直接使用原生 `Mode.RECALL_SEARCH`。`load_userdict` 接受 jieba 风格的 `word freq tag` 文本词典。`tag` 与 `use_paddle` 仅为兼容 API 形状而接受，当前会忽略；`HMM=True` 不会被忽略，它会加载内置 BMES HMM 插件来恢复未知词。需要 offset、source、score 或批处理时，请直接使用 `nexaloid.Tokenizer`。
+`cut` 返回字符串迭代器，`lcut` 返回列表。`cut_for_search` 使用保守的 `Search` 模式，会避免如 `武汉市长江大桥` 中 `市长` 这类跨边界候选；需更激进召回时请直接使用原生 `Mode.RECALL_SEARCH`。`load_userdict` 接受 jieba 风格的 `word freq tag` 文本词典。`add_word` 传入 `tag` 时会警告当前不支持词性标注，`use_paddle=True` 会抛出 `NotImplementedError`；`HMM=True` 会加载内置 BMES HMM 插件来恢复未知词。需要 offset、source、score 或批处理时，请直接使用 `nexaloid.Tokenizer`。
 
 ### Node.js
 

@@ -5,6 +5,7 @@ import json
 import math
 import os
 import sys
+import warnings
 from enum import IntEnum
 from pathlib import Path
 
@@ -402,7 +403,7 @@ class Tokenizer:
         self._hmm_config_json: str | None = None
         self._hmm_ready = False
         self._plugins_loaded = False
-        self._hmm_search_cache: dict[str, tuple[str, ...]] = {}
+        self._hmm_search_cache: dict[str, tuple[tuple[int, str], ...]] = {}
         self._closed = False
         self._words: dict[str, float] = {}
         self._deleted: set[str] = set()
@@ -454,7 +455,8 @@ class Tokenizer:
 
     def add_word(self, word: str, freq: float | None = None, tag: str | None = None) -> None:
         self._ensure_open()
-        del tag
+        if tag is not None:
+            warnings.warn("tag is ignored because Nexaloid does not provide POS tagging", RuntimeWarning, stacklevel=2)
         score = float(freq if freq is not None else 10.0)
         self._add_word_score(word, score)
 
@@ -640,20 +642,21 @@ class Tokenizer:
         return self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE, HMM=HMM)
 
     def cut_for_search(self, text: str, HMM: bool = False):
+        candidates = [
+            (token.start_char, token.text)
+            for token in self._tokenize_with_engine(self._engine, text, Mode.SEARCH)
+            if len(token.text) > 1
+        ]
+        if HMM:
+            candidates.extend(self._cached_hmm_search_terms(text))
+
         seen: set[str] = set()
-        for word in self._token_texts(text, Mode.SEARCH, HMM=False):
-            if len(word) <= 1:
-                continue
+        for _, word in sorted(candidates, key=lambda item: item[0]):
             if word not in seen:
                 seen.add(word)
                 yield word
-        if HMM:
-            for word in self._cached_hmm_search_terms(text):
-                if len(word) > 1 and word not in seen:
-                    seen.add(word)
-                    yield word
 
-    def _cached_hmm_search_terms(self, text: str) -> tuple[str, ...]:
+    def _cached_hmm_search_terms(self, text: str) -> tuple[tuple[int, str], ...]:
         if len(text) > _MAX_HMM_SEARCH_CHARS:
             return ()
         cached = self._hmm_search_cache.get(text)
@@ -685,7 +688,13 @@ class Tokenizer:
                 if words is None:
                     words = self._hmm_overlay_texts(snippet)
                     cache[snippet] = words
-                yield from words
+                cursor = 0
+                for word in words:
+                    local_start = snippet.find(word, cursor)
+                    if local_start < 0:
+                        continue
+                    cursor = local_start + len(word)
+                    yield base[start].start_char + local_start, word
 
     def _engine_for_hmm(self, enabled: bool) -> ctypes.c_void_p:
         if not enabled:
