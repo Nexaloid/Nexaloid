@@ -2,7 +2,7 @@
 
 This branch tracks the latest released Nexaloid CPP entry files.
 
-Version: 0.1.24
+Version: 0.1.25
 
 ## Use
 
