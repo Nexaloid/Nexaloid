@@ -18,6 +18,27 @@ enum class Mode {
     RecallSearch = NX_MODE_RECALL_SEARCH,
 };
 
+enum class Source : uint16_t {
+    BaseDict = NX_SOURCE_BASE_DICT,
+    UserDict = NX_SOURCE_USER_DICT,
+    DomainDict = NX_SOURCE_DOMAIN_DICT,
+    Rule = NX_SOURCE_RULE,
+    Unknown = NX_SOURCE_UNKNOWN,
+    Plugin = NX_SOURCE_PLUGIN,
+};
+
+inline const char* source_name(Source source) noexcept {
+    switch (source) {
+    case Source::BaseDict: return "base_dict";
+    case Source::UserDict: return "user_dict";
+    case Source::DomainDict: return "domain_dict";
+    case Source::Rule: return "rule";
+    case Source::Unknown: return "unknown";
+    case Source::Plugin: return "plugin";
+    default: return "unrecognized";
+    }
+}
+
 struct Token {
     std::string text;
     uint32_t start_byte;
@@ -26,7 +47,8 @@ struct Token {
     uint32_t end_char;
     uint32_t word_id;
     uint16_t pos_id;
-    uint16_t source;
+    Source source;
+    uint16_t flags;
     float score;
 };
 
@@ -156,7 +178,8 @@ private:
             token->end_char,
             token->word_id,
             token->pos_id,
-            token->source,
+            static_cast<Source>(token->source),
+            token->flags,
             token->score,
         });
     }

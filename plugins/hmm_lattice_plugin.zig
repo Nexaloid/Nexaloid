@@ -17,7 +17,7 @@ const candidate_provider_kind = 1;
 const artifact_magic = "NXHMM001";
 const header_len = 44;
 const default_hmm_score: f32 = -14.0;
-const allocator = std.heap.page_allocator;
+const allocator = std.heap.c_allocator;
 
 const NxPluginInfo = extern struct {
     abi_version: u32,
@@ -393,15 +393,23 @@ fn buildLexiconTrie(trie: *LexiconTrie, blob: []const u8, expected_count: u32) !
 fn provideLexiconCandidates(model: *Model, text: []const u8, char_len: u32, cb: NxPluginCandidateCallback, user_data: ?*anyopaque) void {
     if (model.lexicon.nodes.items.len == 0) return;
     var byte_start: usize = 0;
-    while (byte_start < text.len) : (byte_start += 1) {
+    var start_char: u32 = 0;
+    while (byte_start < text.len) {
+        const start_len = std.unicode.utf8ByteSequenceLength(text[byte_start]) catch return;
+        if (byte_start + start_len > text.len) return;
         var node_index: usize = 0;
         var byte_end = byte_start;
-        while (byte_end < text.len) : (byte_end += 1) {
-            node_index = model.lexicon.child(node_index, text[byte_end]) orelse break;
+        var end_char = start_char;
+        scan: while (byte_end < text.len) {
+            const codepoint_len = std.unicode.utf8ByteSequenceLength(text[byte_end]) catch break;
+            const next_end = byte_end + codepoint_len;
+            if (next_end > text.len) break;
+            for (text[byte_end..next_end]) |byte| {
+                node_index = model.lexicon.child(node_index, byte) orelse break :scan;
+            }
+            byte_end = next_end;
+            end_char += 1;
             if (model.lexicon.nodes.items[node_index].terminal) {
-                const end = byte_end + 1;
-                const start_char = byteToChar(text, byte_start) orelse continue;
-                const end_char = byteToChar(text, end) orelse continue;
                 const len = end_char - start_char;
                 if (end_char <= char_len and len >= 2) {
                     var candidate = NxPluginCandidate{
@@ -415,6 +423,8 @@ fn provideLexiconCandidates(model: *Model, text: []const u8, char_len: u32, cb: 
                 }
             }
         }
+        byte_start += start_len;
+        start_char += 1;
     }
 }
 
@@ -460,17 +470,20 @@ fn decodeHmmRun(
     for (scores) |*row| row.* = .{ -std.math.inf(f64), -std.math.inf(f64), -std.math.inf(f64), -std.math.inf(f64) };
     for (prev) |*row| row.* = .{ null, null, null, null };
 
+    const first_emissions = emissionScores(plugin.model, chars[start].codepoint);
     inline for (.{ State.B, State.S }) |state| {
-        scores[0][@intFromEnum(state)] = plugin.model.start[@intFromEnum(state)] + emissionScore(plugin.model, state, chars[start].codepoint);
+        scores[0][@intFromEnum(state)] = plugin.model.start[@intFromEnum(state)] + first_emissions.*[@intFromEnum(state)];
     }
 
     var i: usize = 1;
     while (i < n) : (i += 1) {
+        const emissions = emissionScores(plugin.model, chars[start + i].codepoint);
         inline for (.{ State.B, State.M, State.E, State.S }) |state| {
+            const emission = emissions.*[@intFromEnum(state)];
             inline for (.{ State.B, State.M, State.E, State.S }) |from| {
                 const trans = plugin.model.transition[@intFromEnum(from)][@intFromEnum(state)];
                 if (std.math.isFinite(trans)) {
-                    const candidate = scores[i - 1][@intFromEnum(from)] + trans + emissionScore(plugin.model, state, chars[start + i].codepoint);
+                    const candidate = scores[i - 1][@intFromEnum(from)] + trans + emission;
                     if (candidate > scores[i][@intFromEnum(state)]) {
                         scores[i][@intFromEnum(state)] = candidate;
                         prev[i][@intFromEnum(state)] = from;
@@ -514,16 +527,16 @@ fn emitHmmCandidate(start: usize, end: usize, score: f32, cb: NxPluginCandidateC
     cb(&candidate, user_data);
 }
 
-fn emissionScore(model: *Model, state: State, codepoint: u21) f64 {
+fn emissionScores(model: *Model, codepoint: u21) *const [4]f64 {
     var lo: usize = 0;
     var hi: usize = model.emissions.len;
     while (lo < hi) {
         const mid = lo + (hi - lo) / 2;
-        const item = model.emissions[mid];
-        if (item.codepoint == codepoint) return item.scores[@intFromEnum(state)];
+        const item = &model.emissions[mid];
+        if (item.codepoint == codepoint) return &item.scores;
         if (item.codepoint < codepoint) lo = mid + 1 else hi = mid;
     }
-    return model.unknown[@intFromEnum(state)];
+    return &model.unknown;
 }
 
 fn numberValue(value: std.json.Value) ?f64 {
@@ -562,17 +575,4 @@ fn readF64(data: []const u8, offset: *usize) ?f64 {
 
 fn isHan(cp: u21) bool {
     return (cp >= 0x3400 and cp <= 0x9FFF) or (cp >= 0xF900 and cp <= 0xFAFF) or (cp >= 0x20000 and cp <= 0x2A6DF);
-}
-
-fn byteToChar(text: []const u8, byte_pos: usize) ?u32 {
-    if (byte_pos > text.len) return null;
-    var i: usize = 0;
-    var chars: u32 = 0;
-    while (i < byte_pos) {
-        const len = std.unicode.utf8ByteSequenceLength(text[i]) catch return null;
-        if (i + len > byte_pos) return null;
-        i += len;
-        chars += 1;
-    }
-    return chars;
 }

@@ -50,7 +50,10 @@ int main() {
     tokenizer.load_rules_json(R"({"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]})");
     bool saw_stock = false;
     for (const auto& token : tokenizer.tokenize("买SH600519")) {
-        if (token.text == "SH600519" && token.source == NX_SOURCE_RULE) {
+        if (token.text == "SH600519" &&
+            token.source == nexaloid::Source::Rule &&
+            std::string_view(nexaloid::source_name(token.source)) == "rule" &&
+            token.flags == 1) {
             saw_stock = true;
         }
     }
