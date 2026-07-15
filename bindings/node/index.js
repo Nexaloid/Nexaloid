@@ -43,6 +43,14 @@ const repoEntityPlugin = ["bin", "lib"]
   .map((dir) => path.join(root, "core", "zig-out", dir, entityPluginName))
   .find((candidate) => fs.existsSync(candidate));
 const entityPluginPath = repoEntityPlugin || packagedEntityPlugin;
+const Source = Object.freeze({
+  BASE_DICT: 1,
+  USER_DICT: 2,
+  DOMAIN_DICT: 3,
+  RULE: 4,
+  UNKNOWN: 5,
+  PLUGIN: 6
+});
 
 // JavaScript stays as a convenience shell; segmentation is implemented by the native addon.
 class Tokenizer extends native.Tokenizer {
@@ -83,6 +91,7 @@ module.exports = {
   entityManifestPath,
   entityManifest: () => JSON.parse(fs.readFileSync(entityManifestPath, "utf8")),
   entityPluginPath,
+  Source,
   Mode: {
     ACCURATE: 0,
     FULL: 1,

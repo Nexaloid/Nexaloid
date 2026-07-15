@@ -3,6 +3,7 @@ const path = require("node:path");
 const {
   Tokenizer,
   Mode,
+  Source,
   entityArtifactPath,
   entityManifest,
   entityManifestPath,
@@ -40,7 +41,10 @@ assertSearch("ChatGPT-5.5支持中文RAG检索。", ["ChatGPT-5.5", "中文", "R
 assertSearch("研究生命起源", ["研究", "生命", "起源"], ["研究生", "究生"]);
 if (!tokenizer.lcut("研究生命起源", { mode: Mode.RECALL_SEARCH }).includes("研究生")) throw new Error("recall search missing candidate");
 tokenizer.loadRulesJson('{"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]}');
-if (!tokenizer.lcut("买SH600519").includes("SH600519")) throw new Error("missing custom rule token");
+const stock = tokenizer.tokenize("买SH600519", Mode.ACCURATE).find((token) => token.text === "SH600519");
+if (!stock || stock.source !== Source.RULE || stock.sourceName !== "rule" || stock.flags !== 1) {
+  throw new Error(`bad custom rule token: ${JSON.stringify(stock)}`);
+}
 tokenizer.clearRules();
 if (!fs.existsSync(hmmArtifactPath)) throw new Error(`missing HMM artifact: ${hmmArtifactPath}`);
 if (!fs.existsSync(hmmManifestPath)) throw new Error(`missing HMM manifest: ${hmmManifestPath}`);
@@ -55,7 +59,7 @@ if (!fs.existsSync(entityPluginPath)) throw new Error(`missing entity plugin: ${
 const entityTokenizer = new Tokenizer();
 entityTokenizer.loadPlugin(entityPluginPath, JSON.stringify({ artifact: entityArtifactPath }));
 const entityTokens = entityTokenizer.tokenize("梅花鹿", 0);
-if (!entityTokens.some((token) => token.text === "梅花鹿" && token.source === 6)) {
+if (!entityTokens.some((token) => token.text === "梅花鹿" && token.source === Source.PLUGIN && token.sourceName === "plugin")) {
   throw new Error(`entity plugin inference failed: ${JSON.stringify(entityTokens)}`);
 }
 entityTokenizer.close();

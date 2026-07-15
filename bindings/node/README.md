@@ -13,12 +13,19 @@ npm install @nexaloid/nexaloid
 ## Usage
 
 ```js
-const nexaloid = require("@nexaloid/nexaloid");
-const tokenizer = new nexaloid.Tokenizer();
+const { Mode, Source, Tokenizer } = require("@nexaloid/nexaloid");
+const tokenizer = new Tokenizer();
 
 console.log(tokenizer.lcut("南京市长江大桥"));
 console.log(tokenizer.cutForSearch("中国科学院计算技术研究所"));
-console.log(tokenizer.lcut("中国科学院计算技术研究所", { mode: nexaloid.Mode.RECALL_SEARCH }));
+console.log(tokenizer.lcut("中国科学院计算技术研究所", { mode: Mode.RECALL_SEARCH }));
+
+for (const token of tokenizer.tokenize("昨日中概股集体跌超百分之五", Mode.SEARCH)) {
+  console.log(token.text, token.sourceName, token.flags);
+  if (token.source === Source.RULE && token.flags !== 0) {
+    console.log("custom rule index", token.flags);
+  }
+}
 ```
 
 The default tokenizer uses the packaged `data/dict/nexaloid.tsv`. Pass `dictPath` when you need a custom dictionary:
@@ -33,7 +40,11 @@ Whitespace tokens are filtered by default. Use `preserveWhitespace` when exact s
 const tokenizer = new nexaloid.Tokenizer({ preserveWhitespace: true });
 ```
 
-`Mode.SEARCH` is conservative and expands the best path only. `Mode.RECALL_SEARCH` keeps the aggressive all-candidate expansion for recall-heavy indexes.
+## Token Contract
+
+`Mode.SEARCH` preserves every non-whitespace token on the Accurate path, including single-character and repeated-position tokens, and adds in-boundary Han 2-gram / 3-gram expansions. `Mode.RECALL_SEARCH` also adds explicit lattice candidates. `cutForSearch()` keeps search-term behavior by filtering one-character terms and deduplicating text.
+
+Each raw token exposes numeric `source`, stable `sourceName`, and `flags`. For `source === Source.RULE`, a nonzero `flags` value is the custom rule's 1-based JSON array index. Plugin tokens use `flags` for plugin-defined subtypes.
 
 ## Build
 

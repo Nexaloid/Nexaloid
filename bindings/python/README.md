@@ -20,6 +20,9 @@ tokenizer = Tokenizer()
 print([token.text for token in tokenizer.tokenize("南京市长江大桥")])
 print([token.text for token in tokenizer.tokenize("中国科学院计算技术研究所", Mode.SEARCH)])
 print([token.text for token in tokenizer.tokenize("中国科学院计算技术研究所", Mode.RECALL_SEARCH)])
+
+for token in tokenizer.tokenize("昨日中概股集体跌超百分之五", Mode.SEARCH):
+    print(token.text, token.source, token.flags)
 ```
 
 The default tokenizer uses the packaged `data/dict/nexaloid.nxdict`. Pass `dict_path` when you need a custom dictionary:
@@ -46,7 +49,12 @@ print(list(jieba.cut_for_search("中国科学院计算技术研究所")))
 ```
 
 `HMM=True` loads the bundled BMES HMM plugin and artifact to recover unknown words such as short names and domain terms.
-`Mode.SEARCH` is conservative and expands the best path only; `Mode.RECALL_SEARCH` exposes all candidate edges when you need aggressive recall.
+
+## Token Contract
+
+`Mode.SEARCH` preserves every non-whitespace token on the Accurate path, including single-character and repeated-position tokens, and adds in-boundary Han 2-gram / 3-gram expansions. `Mode.RECALL_SEARCH` also adds explicit lattice candidates. `cut_for_search()` keeps search-term behavior by filtering one-character terms and deduplicating text.
+
+Each token exposes the stable source name in `source` and source-specific metadata in `flags`. For `source == "rule"`, a nonzero `flags` value is the custom rule's 1-based JSON array index. Plugin tokens use `flags` for plugin-defined subtypes.
 
 ## Development
 

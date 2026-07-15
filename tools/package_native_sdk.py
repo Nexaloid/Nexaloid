@@ -129,6 +129,12 @@ Platform: {platform}
 
 {body}
 
+## Token Contract
+
+Search preserves every non-whitespace token on the Accurate path, including single-character and repeated-position tokens, and adds in-boundary Han 2-gram / 3-gram expansions. RecallSearch also adds explicit lattice candidates.
+
+`NxToken.source` identifies the token origin. For rule tokens, a nonzero `flags` value is the custom rule's 1-based JSON array index. Plugin tokens use `flags` for plugin-defined subtypes.
+
 ## Layout
 
 - `include/`: public C ABI headers and optional C++ wrapper

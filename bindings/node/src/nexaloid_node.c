@@ -54,6 +54,18 @@ static void finalize_tokenizer(napi_env env, void *data, void *hint) {
   }
 }
 
+static const char *source_name(uint16_t source) {
+  switch (source) {
+    case NX_SOURCE_BASE_DICT: return "base_dict";
+    case NX_SOURCE_USER_DICT: return "user_dict";
+    case NX_SOURCE_DOMAIN_DICT: return "domain_dict";
+    case NX_SOURCE_RULE: return "rule";
+    case NX_SOURCE_UNKNOWN: return "unknown";
+    case NX_SOURCE_PLUGIN: return "plugin";
+    default: return "unrecognized";
+  }
+}
+
 static void on_token(const NxToken *token, const char *text, size_t text_len, void *user_data) {
   (void)text_len;
   TokenizeContext *ctx = (TokenizeContext *)user_data;
@@ -80,6 +92,10 @@ static void on_token(const NxToken *token, const char *text, size_t text_len, vo
   napi_set_named_property(env, item, "posId", value);
   napi_create_uint32(env, token->source, &value);
   napi_set_named_property(env, item, "source", value);
+  napi_create_string_utf8(env, source_name(token->source), NAPI_AUTO_LENGTH, &value);
+  napi_set_named_property(env, item, "sourceName", value);
+  napi_create_uint32(env, token->flags, &value);
+  napi_set_named_property(env, item, "flags", value);
   napi_create_double(env, token->score, &value);
   napi_set_named_property(env, item, "score", value);
 

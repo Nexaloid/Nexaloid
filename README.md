@@ -105,9 +105,11 @@ let tokens = tokenizer.tokenize("武汉市长江大桥", Mode::Accurate)?;
 | Mode | Behavior |
 |------|----------|
 | **Accurate** | Viterbi shortest-path decoding; pure whitespace tokens are filtered by default, unless `preserve_whitespace` is enabled |
-| **Search** | Runs Accurate first, then expands tokens on the best path with Han 2-gram / 3-gram tokens; avoids cross-boundary semantic noise |
-| **RecallSearch** | Does not depend on the best path; expands all lattice candidate edges with Han 2-gram / 3-gram tokens for maximum recall |
+| **Search** | Preserves every non-whitespace token on the Accurate best path, including single-character and repeated-position tokens, then adds Han 2-gram / 3-gram expansions without crossing path boundaries |
+| **RecallSearch** | Preserves the Accurate path, then adds all explicit lattice candidates and their Han 2-gram / 3-gram expansions for maximum recall |
 | **Full** | Kept for compatibility with jieba's `cut_all` / full-mode API shape; in the current version it behaves exactly like Accurate |
+
+Raw `Search` / `RecallSearch` token output is positional and is not deduplicated by text. Convenience `cut_for_search` APIs keep their search-term behavior by filtering one-character terms and deduplicating text.
 
 ---
 

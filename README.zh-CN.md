@@ -105,9 +105,11 @@ let tokens = tokenizer.tokenize("武汉市长江大桥", Mode::Accurate)?;
 | 模式 | 行为 |
 |------|------|
 | **Accurate** | Viterbi 最短路径解码；默认过滤纯空白 token（可通过 `preserve_whitespace` 关闭过滤） |
-| **Search** | 先执行 Accurate 获得最优路径，再对最优路径上的 token 进行汉字 2‑gram / 3‑gram 扩展，避免跨边界语义噪声 |
-| **RecallSearch** | 不依赖最优路径，直接对全部 lattice 候选边进行汉字 2‑gram / 3‑gram 扩展，用于最大化召回 |
+| **Search** | 完整保留 Accurate 最优路径上的非空白 token（包括单字及不同位置的重复词），再增加不跨路径边界的汉字 2‑gram / 3‑gram 扩展 |
+| **RecallSearch** | 保留 Accurate 路径，再加入全部显式 lattice 候选及其汉字 2‑gram / 3‑gram 扩展，用于最大化召回 |
 | **Full** | 为兼容 jieba 的 `cut_all` / 全模式 API 形状而保留；当前版本行为完全等同于 Accurate |
+
+原始 `Search` / `RecallSearch` Token 输出保留位置信息，不按文本全局去重。`cut_for_search` 便利接口仍会过滤单字并按文本去重，以维持搜索词接口行为。
 
 ---
 

@@ -91,11 +91,11 @@ pub const Tokenizer = struct {
         defer lattice.deinit();
         try addCandidates(candidate_ctx, self.allocator, text, scan_ctx.chars.items, &lattice);
         try lattice_mod.addUnknownFallback(&lattice, scan_ctx.chars.items);
-        if (mode == .recall_search) return recallSearchTokens(self.allocator, &lattice, scan_ctx.chars.items);
         // Accurate mode chooses the globally best path, with whitespace retention controlled by config.
         var path = try decoder.decode(self.allocator, &lattice);
         defer path.deinit(self.allocator);
         try ensureCompletePath(path.items, @intCast(scan_ctx.chars.items.len));
+        if (mode == .recall_search) return recallSearchTokens(self.allocator, &lattice, path.items, scan_ctx.chars.items);
         if (mode == .search) return searchTokens(self.allocator, path.items, scan_ctx.chars.items);
         if (self.preserve_whitespace) return cloneEdges(self.allocator, path.items);
         return filterSpaces(self.allocator, path.items, scan_ctx.chars.items);
@@ -109,16 +109,25 @@ pub const Mode = enum {
     recall_search,
 };
 
-fn recallSearchTokens(allocator: std.mem.Allocator, lattice: *const lattice_mod.Lattice, chars: []const types.NxChar) !std.ArrayListUnmanaged(types.NxEdge) {
-    return searchTokens(allocator, lattice.edges.items, chars);
+fn recallSearchTokens(allocator: std.mem.Allocator, lattice: *const lattice_mod.Lattice, path: []const types.NxEdge, chars: []const types.NxChar) !std.ArrayListUnmanaged(types.NxEdge) {
+    var out = try searchTokens(allocator, path, chars);
+    errdefer out.deinit(allocator);
+    for (lattice.edges.items) |edge| {
+        // Only fallback edges chosen by Accurate belong in output; emitting every fallback would add every character.
+        if (edge.source == .unknown) continue;
+        try appendSearchToken(allocator, &out, edge, chars);
+        try addSearchNgrams(allocator, &out, edge, chars);
+    }
+    std.mem.sort(types.NxEdge, out.items, {}, edgeLessThan);
+    return out;
 }
 
 fn searchTokens(allocator: std.mem.Allocator, edges: []const types.NxEdge, chars: []const types.NxChar) !std.ArrayListUnmanaged(types.NxEdge) {
     var out: std.ArrayListUnmanaged(types.NxEdge) = .empty;
     errdefer out.deinit(allocator);
     for (edges) |edge| {
-        // Search-like modes expose explicit candidates plus small ngrams for recall.
-        if (edge.source != .unknown) try appendSearchToken(allocator, &out, edge, chars);
+        // Search preserves the input path and adds small ngrams for recall.
+        try appendSearchToken(allocator, &out, edge, chars);
         try addSearchNgrams(allocator, &out, edge, chars);
     }
     std.mem.sort(types.NxEdge, out.items, {}, edgeLessThan);
@@ -126,9 +135,11 @@ fn searchTokens(allocator: std.mem.Allocator, edges: []const types.NxEdge, chars
 }
 
 fn appendSearchToken(allocator: std.mem.Allocator, out: *std.ArrayListUnmanaged(types.NxEdge), edge: types.NxEdge, chars: []const types.NxChar) !void {
-    if (edge.end_char - edge.start_char < 2) return;
-    for (out.items) |existing| {
-        if (sameText(existing, edge, chars)) return;
+    if (isSpaceEdge(edge, chars)) return;
+    for (out.items) |*existing| {
+        if (!sameSearchIdentity(existing.*, edge)) continue;
+        if (edge.score > existing.score) existing.* = edge;
+        return;
     }
     try out.append(allocator, edge);
 }
@@ -160,14 +171,13 @@ fn addNgrams(allocator: std.mem.Allocator, out: *std.ArrayListUnmanaged(types.Nx
     }
 }
 
-fn sameText(a: types.NxEdge, b: types.NxEdge, chars: []const types.NxChar) bool {
-    const a_len = a.end_char - a.start_char;
-    if (a_len != b.end_char - b.start_char) return false;
-    var i: u32 = 0;
-    while (i < a_len) : (i += 1) {
-        if (chars[a.start_char + i].codepoint != chars[b.start_char + i].codepoint) return false;
-    }
-    return true;
+fn sameSearchIdentity(a: types.NxEdge, b: types.NxEdge) bool {
+    return a.start_char == b.start_char and
+        a.end_char == b.end_char and
+        a.word_id == b.word_id and
+        a.pos_id == b.pos_id and
+        a.source == b.source and
+        a.flags == b.flags;
 }
 
 fn isHanEdge(edge: types.NxEdge, chars: []const types.NxChar) bool {
@@ -181,7 +191,10 @@ fn isHanEdge(edge: types.NxEdge, chars: []const types.NxChar) bool {
 fn edgeLessThan(_: void, a: types.NxEdge, b: types.NxEdge) bool {
     if (a.start_char != b.start_char) return a.start_char < b.start_char;
     if (a.end_char != b.end_char) return a.end_char < b.end_char;
-    return a.word_id < b.word_id;
+    if (a.word_id != b.word_id) return a.word_id < b.word_id;
+    if (a.source != b.source) return @intFromEnum(a.source) < @intFromEnum(b.source);
+    if (a.flags != b.flags) return a.flags < b.flags;
+    return a.pos_id < b.pos_id;
 }
 
 fn ensureCompletePath(edges: []const types.NxEdge, char_len: u32) !void {
@@ -374,47 +387,55 @@ test "search mode emits sub token ngrams" {
     try std.testing.expect(saw_calc_tech);
 }
 
-test "search mode filters single char and duplicate spans" {
+test "search modes preserve accurate single-character tokens" {
     var tokenizer = try Tokenizer.init(std.testing.allocator);
     defer tokenizer.deinit();
-    try tokenizer.addWord("南京", 1, 8.0, 0);
-    try tokenizer.addWord("南京市", 2, 20.0, 0);
 
-    var tokens = try tokenizer.tokenizeMode("南京市", .search);
-    defer tokens.deinit(std.testing.allocator);
+    const cases = [_][]const u8{ "中概股", "闪迪", "美股", "跌超" };
+    for (cases) |text| {
+        var accurate = try tokenizer.tokenizeMode(text, .accurate);
+        defer accurate.deinit(std.testing.allocator);
+        var search = try tokenizer.tokenizeMode(text, .search);
+        defer search.deinit(std.testing.allocator);
+        var recall = try tokenizer.tokenizeMode(text, .recall_search);
+        defer recall.deinit(std.testing.allocator);
 
-    for (tokens.items, 0..) |token, i| {
-        try std.testing.expect(token.end_char - token.start_char >= 2);
-        for (tokens.items[0..i]) |prev| {
-            try std.testing.expect(prev.start_char != token.start_char or prev.end_char != token.end_char);
+        for (accurate.items) |expected| {
+            var search_has_token = false;
+            for (search.items) |token| {
+                if (sameSearchIdentity(token, expected)) search_has_token = true;
+            }
+            var recall_has_token = false;
+            for (recall.items) |token| {
+                if (sameSearchIdentity(token, expected)) recall_has_token = true;
+            }
+            try std.testing.expect(search_has_token);
+            try std.testing.expect(recall_has_token);
         }
     }
 }
 
-test "search mode deduplicates text and skips ascii ngrams" {
+test "search mode preserves repeated positions and skips ascii ngrams" {
     var tokenizer = try Tokenizer.init(std.testing.allocator);
     defer tokenizer.deinit();
     try tokenizer.addWord("长春", 1, 8.0, 0);
     try tokenizer.addWord("长春市", 2, 20.0, 0);
     try tokenizer.addWord("春节前", 3, 18.0, 0);
 
-    var tokens = try tokenizer.tokenizeMode("长春市长春节前ChatGPT-5.5", .search);
+    const text = "长春市长春节前ChatGPT-5.5长春";
+    var tokens = try tokenizer.tokenizeMode(text, .search);
     defer tokens.deinit(std.testing.allocator);
 
     var saw_ascii = false;
-    for (tokens.items, 0..) |token, i| {
-        const text = "长春市长春节前ChatGPT-5.5"[token.start_byte..token.end_byte];
-        if (std.mem.eql(u8, text, "ChatGPT-5.5")) saw_ascii = true;
-        try std.testing.expect(!std.mem.eql(u8, text, "Ch"));
-        for (tokens.items[0..i]) |prev| {
-            try std.testing.expect(!std.mem.eql(
-                u8,
-                text,
-                "长春市长春节前ChatGPT-5.5"[prev.start_byte..prev.end_byte],
-            ));
-        }
+    var changchun_count: usize = 0;
+    for (tokens.items) |token| {
+        const token_text = text[token.start_byte..token.end_byte];
+        if (std.mem.eql(u8, token_text, "ChatGPT-5.5")) saw_ascii = true;
+        if (std.mem.eql(u8, token_text, "长春")) changchun_count += 1;
+        try std.testing.expect(!std.mem.eql(u8, token_text, "Ch"));
     }
     try std.testing.expect(saw_ascii);
+    try std.testing.expectEqual(@as(usize, 2), changchun_count);
 }
 
 test "search mode avoids cross-boundary recall candidates" {

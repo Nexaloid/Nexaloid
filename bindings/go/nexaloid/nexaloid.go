@@ -34,6 +34,36 @@ const (
 	RecallSearch Mode = C.NX_MODE_RECALL_SEARCH
 )
 
+type Source uint16
+
+const (
+	SourceBaseDict   Source = C.NX_SOURCE_BASE_DICT
+	SourceUserDict   Source = C.NX_SOURCE_USER_DICT
+	SourceDomainDict Source = C.NX_SOURCE_DOMAIN_DICT
+	SourceRule       Source = C.NX_SOURCE_RULE
+	SourceUnknown    Source = C.NX_SOURCE_UNKNOWN
+	SourcePlugin     Source = C.NX_SOURCE_PLUGIN
+)
+
+func (source Source) String() string {
+	switch source {
+	case SourceBaseDict:
+		return "base_dict"
+	case SourceUserDict:
+		return "user_dict"
+	case SourceDomainDict:
+		return "domain_dict"
+	case SourceRule:
+		return "rule"
+	case SourceUnknown:
+		return "unknown"
+	case SourcePlugin:
+		return "plugin"
+	default:
+		return "unrecognized"
+	}
+}
+
 type Token struct {
 	Text      string
 	StartByte uint32
@@ -42,8 +72,13 @@ type Token struct {
 	EndChar   uint32
 	WordID    uint32
 	PosID     uint16
-	Source    uint16
+	Source    Source
+	Flags     uint16
 	Score     float32
+}
+
+func (token Token) CustomRuleIndex() (uint16, bool) {
+	return token.Flags, token.Source == SourceRule && token.Flags != 0
 }
 
 type Tokenizer struct {
@@ -193,7 +228,8 @@ func nxGoTokenCallback(token *C.NxToken, text *C.char, textLen C.size_t, userDat
 		EndChar:   uint32(token.end_char),
 		WordID:    uint32(token.word_id),
 		PosID:     uint16(token.pos_id),
-		Source:    uint16(token.source),
+		Source:    Source(token.source),
+		Flags:     uint16(token.flags),
 		Score:     float32(token.score),
 	})
 }

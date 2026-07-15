@@ -196,7 +196,6 @@
     - "at"
     - "atG"
   expected_search_unique: true
-  expected_search_min_len: 2
   tags:
     - search
     - mixed_text
@@ -223,11 +222,38 @@
   expected_search_contains:
     - "研究生"
     - "究生"
-  expected_search_unique: true
-  expected_search_min_len: 2
   tags:
     - search
     - recall
+
+- id: search_006
+  text: "昨日中概股集体跌超百分之五"
+  mode: raw_search
+  expected_search_contains:
+    - "中"
+    - "概"
+    - "股"
+    - "跌"
+    - "超"
+  tags:
+    - search
+    - single_char
+    - coverage
+
+- id: recall_search_002
+  text: "昨日中概股集体跌超百分之五"
+  mode: recall_search
+  expected_search_contains:
+    - "中"
+    - "概"
+    - "股"
+    - "跌"
+    - "超"
+  tags:
+    - search
+    - recall
+    - single_char
+    - coverage
 
 - id: structured_001
   text: "https://example.com/a-b?x=1"

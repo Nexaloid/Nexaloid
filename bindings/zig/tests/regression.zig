@@ -44,7 +44,13 @@ pub fn main() !void {
     defer tokens.deinit(std.heap.page_allocator);
     var saw_stock = false;
     for (tokens.items) |token| {
-        if (std.mem.eql(u8, token.text, "SH600519")) saw_stock = true;
+        if (std.mem.eql(u8, token.text, "SH600519") and
+            token.source == .rule and
+            std.mem.eql(u8, token.source.name(), "rule") and
+            token.customRuleIndex() == 1)
+        {
+            saw_stock = true;
+        }
     }
     try std.testing.expect(saw_stock);
 

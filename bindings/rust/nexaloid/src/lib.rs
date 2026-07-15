@@ -39,6 +39,56 @@ pub enum Mode {
     RecallSearch,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Source {
+    BaseDict,
+    UserDict,
+    DomainDict,
+    Rule,
+    Unknown,
+    Plugin,
+    Unrecognized(u16),
+}
+
+impl Source {
+    pub const fn from_raw(value: u16) -> Self {
+        match value {
+            1 => Self::BaseDict,
+            2 => Self::UserDict,
+            3 => Self::DomainDict,
+            4 => Self::Rule,
+            5 => Self::Unknown,
+            6 => Self::Plugin,
+            value => Self::Unrecognized(value),
+        }
+    }
+
+    pub const fn raw(self) -> u16 {
+        match self {
+            Self::BaseDict => 1,
+            Self::UserDict => 2,
+            Self::DomainDict => 3,
+            Self::Rule => 4,
+            Self::Unknown => 5,
+            Self::Plugin => 6,
+            Self::Unrecognized(value) => value,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::BaseDict => "base_dict",
+            Self::UserDict => "user_dict",
+            Self::DomainDict => "domain_dict",
+            Self::Rule => "rule",
+            Self::Unknown => "unknown",
+            Self::Plugin => "plugin",
+            Self::Unrecognized(_) => "unrecognized",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Token {
     pub text: String,
@@ -48,8 +98,20 @@ pub struct Token {
     pub end_char: u32,
     pub word_id: u32,
     pub pos_id: u16,
-    pub source: u16,
+    pub source: Source,
+    pub flags: u16,
     pub score: f32,
+}
+
+impl Token {
+    /// Returns the custom rule's 1-based JSON array index.
+    pub const fn custom_rule_index(&self) -> Option<u16> {
+        if matches!(self.source, Source::Rule) && self.flags != 0 {
+            Some(self.flags)
+        } else {
+            None
+        }
+    }
 }
 
 pub struct Tokenizer {
@@ -245,7 +307,8 @@ unsafe extern "C" fn on_token(
         end_char: token.end_char,
         word_id: token.word_id,
         pos_id: token.pos_id,
-        source: token.source,
+        source: Source::from_raw(token.source),
+        flags: token.flags,
         score: token.score,
     });
 }
@@ -264,7 +327,7 @@ fn check(status: sys::NxStatus) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Mode, Tokenizer};
+    use super::{Mode, Source, Tokenizer};
 
     fn texts(tokens: Vec<super::Token>) -> Vec<String> {
         tokens.into_iter().map(|token| token.text).collect()
@@ -340,11 +403,16 @@ mod tests {
                 r#"{"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]}"#,
             )
             .unwrap();
-        assert!(
-            texts(tokenizer.tokenize("买SH600519", Mode::Accurate).unwrap())
-                .iter()
-                .any(|item| item == "SH600519")
-        );
+        let tokens = tokenizer.tokenize("买SH600519", Mode::Accurate).unwrap();
+        let token = tokens
+            .iter()
+            .find(|token| token.text == "SH600519")
+            .expect("missing custom rule token");
+        assert_eq!(token.source, Source::Rule);
+        assert_eq!(token.source.as_str(), "rule");
+        assert_eq!(token.flags, 1);
+        assert_eq!(token.custom_rule_index(), Some(1));
+        assert_eq!(Source::from_raw(99), Source::Unrecognized(99));
         tokenizer.clear_rules().unwrap();
     }
 }

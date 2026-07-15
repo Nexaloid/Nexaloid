@@ -87,6 +87,13 @@ Download the matching `nexaloid-{language}-<version>-<platform>.zip` asset from 
 ```
 
 The dictionary is bundled at `data/dict/nexaloid.nxdict`.
+
+## Token Contract
+
+Search preserves every non-whitespace token on the Accurate path, including single-character and repeated-position tokens, and adds in-boundary Han 2-gram / 3-gram expansions. RecallSearch also adds explicit lattice candidates.
+
+`NxToken.source` identifies the token origin. For rule tokens, a nonzero `flags` value is the custom rule's 1-based JSON array index. Plugin tokens use `flags` for plugin-defined subtypes.
+
 The optional BMES HMM lattice artifact is bundled at `data/hmm/bmes_hmm_wordhub_lattice.nxhmm`.
 The optional HMM CandidateProvider plugin source is bundled at `plugins/hmm_lattice_plugin.zig`.
 The entity CandidateProvider plugin source is bundled at `plugins/entity_bmes_plugin.zig`.

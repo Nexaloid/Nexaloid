@@ -15,7 +15,24 @@ try tokenizer.loadRulesJson(
 
 var tokens = try tokenizer.tokenize(std.heap.page_allocator, "买SH600519", .accurate);
 defer tokens.deinit(std.heap.page_allocator);
+
+for (tokens.items) |token| {
+    std.debug.print("{s} source={s} flags={}\n", .{ token.text, token.source.name(), token.flags });
+}
 ```
 
-Use `.search` for conservative best-path search expansion and `.recall_search` for aggressive all-candidate recall expansion.
+## Token Contract
+
+`.search` preserves every non-whitespace token on the Accurate path, including single-character and repeated-position tokens, and adds in-boundary Han 2-gram / 3-gram expansions. `.recall_search` also adds explicit lattice candidates.
+
+`Token.source` uses the public `Source` enum and `Source.name()` returns its stable name. `Token.customRuleIndex()` returns the custom rule's 1-based JSON array index when the source is `.rule` and `flags` is nonzero.
+
 Whitespace tokens are filtered by default; call `Tokenizer.initOptions(dict_path, true)` to preserve them.
+
+## Development
+
+```powershell
+cd bindings/zig
+$env:PATH = "$PWD\..\..\core\zig-out\bin;$env:PATH"
+zig build regression
+```

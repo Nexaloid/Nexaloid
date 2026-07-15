@@ -115,8 +115,21 @@ func TestCustomRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(tokenTexts(tokens), "SH600519") {
+	var stock *Token
+	for i := range tokens {
+		if tokens[i].Text == "SH600519" {
+			stock = &tokens[i]
+			break
+		}
+	}
+	if stock == nil {
 		t.Fatalf("missing custom rule token: %#v", tokens)
+	}
+	if stock.Source != SourceRule || stock.Source.String() != "rule" {
+		t.Fatalf("unexpected custom rule source: %#v", stock)
+	}
+	if index, ok := stock.CustomRuleIndex(); !ok || index != 1 {
+		t.Fatalf("unexpected custom rule flags: %#v", stock)
 	}
 	if err := tokenizer.ClearRules(); err != nil {
 		t.Fatal(err)
