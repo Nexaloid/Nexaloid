@@ -22,7 +22,7 @@ typedef enum {
     NX_ERR_INTERNAL = 255
 } NxStatus;
 
-/* Tokenization modes. Search expands the best path; recall search exposes all candidate edges. */
+/* Search preserves and expands the best path; recall search also exposes explicit candidate edges. */
 typedef enum {
     NX_MODE_ACCURATE = 0,
     NX_MODE_FULL = 1,
@@ -87,7 +87,7 @@ typedef struct {
     uint16_t pos_id;
     /* NxSource value describing where the token came from. */
     uint16_t source;
-    /* Reserved flags for search expansion, normalization state, and future metadata. */
+    /* Source-specific metadata: custom-rule 1-based index, plugin subtype, or 0 when unused. */
     uint16_t flags;
     /* Decoder score. Larger is better. */
     float score;
