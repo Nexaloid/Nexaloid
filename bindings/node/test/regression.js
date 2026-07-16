@@ -58,8 +58,8 @@ if (!fs.existsSync(path.join(path.dirname(entityArtifactPath), "APACHE-2.0.txt")
 if (!fs.existsSync(entityPluginPath)) throw new Error(`missing entity plugin: ${entityPluginPath}`);
 const entityTokenizer = new Tokenizer();
 entityTokenizer.loadPlugin(entityPluginPath, JSON.stringify({ artifact: entityArtifactPath }));
-const entityTokens = entityTokenizer.tokenize("梅花鹿", 0);
-if (!entityTokens.some((token) => token.text === "梅花鹿" && token.source === Source.PLUGIN && token.sourceName === "plugin")) {
+const entityTokens = entityTokenizer.tokenize("欧盟委员会", 0);
+if (!entityTokens.some((token) => token.text === "欧盟委员会" && token.source === Source.PLUGIN && token.sourceName === "plugin")) {
   throw new Error(`entity plugin inference failed: ${JSON.stringify(entityTokens)}`);
 }
 entityTokenizer.close();

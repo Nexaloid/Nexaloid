@@ -44,9 +44,9 @@ def main() -> None:
             "if (words !== '南京市/长江大桥') throw new Error(words);"
             "const e = new Tokenizer();"
             "e.loadPlugin(entityPluginPath, JSON.stringify({artifact: entityArtifactPath}));"
-            "const entities = e.tokenize('梅花鹿', 0);"
+            "const entities = e.tokenize('欧盟委员会', 0);"
             "e.close();"
-            "if (!entities.some((token) => token.text === '梅花鹿' && token.source === 6)) throw new Error(JSON.stringify(entities));"
+            "if (!entities.some((token) => token.text === '欧盟委员会' && token.source === 6)) throw new Error(JSON.stringify(entities));"
         )
         subprocess.run([node, "-e", script], cwd=tmp_path, check=True)
     tarball.unlink(missing_ok=True)

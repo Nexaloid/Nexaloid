@@ -116,7 +116,7 @@ jobs:
       - name: Regression test Python binding
         run: |
           python -c "from nexaloid import Tokenizer; t=Tokenizer(); assert '/'.join(t.lcut('南京市长江大桥')) == '南京市/长江大桥'; assert t.lcut('小明硕士毕业', HMM=True) == ['小明', '硕士', '毕业']; t.close()"
-          python -c 'import json; from nexaloid import Tokenizer, entity_artifact_path, entity_manifest, entity_plugin_path; assert entity_manifest()["quality"]["test"]["f1"] >= 0.86; t=Tokenizer(); t.load_plugin(entity_plugin_path(), json.dumps({"artifact": str(entity_artifact_path())})); assert any(x.text == "梅花鹿" and x.source == "plugin" for x in t.tokenize("梅花鹿")); t.close()'
+          python -c 'import json; from nexaloid import Tokenizer, entity_artifact_path, entity_manifest, entity_plugin_path; assert entity_manifest()["quality"]["test"]["f1"] >= 0.86; t=Tokenizer(); t.load_plugin(entity_plugin_path(), json.dumps({"artifact": str(entity_artifact_path())})); assert any(x.text == "欧盟委员会" and x.source == "plugin" for x in t.tokenize("欧盟委员会")); t.close()'
 
   native-binding-regression:
     name: Native binding regression (${{ matrix.language }})
@@ -388,7 +388,7 @@ jobs:
       - name: Regression test Python binding
         run: |
           python -c "from nexaloid import Tokenizer; t=Tokenizer(); assert '/'.join(t.lcut('南京市长江大桥')) == '南京市/长江大桥'; assert t.lcut('小明硕士毕业', HMM=True) == ['小明', '硕士', '毕业']; t.close()"
-          python -c 'import json; from nexaloid import Tokenizer, entity_artifact_path, entity_manifest, entity_plugin_path; assert entity_manifest()["quality"]["test"]["f1"] >= 0.86; t=Tokenizer(); t.load_plugin(entity_plugin_path(), json.dumps({"artifact": str(entity_artifact_path())})); assert any(x.text == "梅花鹿" and x.source == "plugin" for x in t.tokenize("梅花鹿")); t.close()'
+          python -c 'import json; from nexaloid import Tokenizer, entity_artifact_path, entity_manifest, entity_plugin_path; assert entity_manifest()["quality"]["test"]["f1"] >= 0.86; t=Tokenizer(); t.load_plugin(entity_plugin_path(), json.dumps({"artifact": str(entity_artifact_path())})); assert any(x.text == "欧盟委员会" and x.source == "plugin" for x in t.tokenize("欧盟委员会")); t.close()'
 
   node-versions:
     name: Node.js ${{ matrix.node }} compatibility
