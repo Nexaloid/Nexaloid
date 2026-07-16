@@ -70,6 +70,16 @@ def core_libs(target_platform: str | None = None) -> list[Path]:
     return libs
 
 
+def rust_core_libs(target_platform: str) -> list[Path]:
+    libs = core_libs(target_platform)
+    if not target_platform.startswith("windows-"):
+        static = list((ROOT / "core/zig-out").rglob("libnexaloid.a"))
+        if not static:
+            raise FileNotFoundError(f"static native library for {target_platform} under core/zig-out")
+        libs.append(static[0])
+    return libs
+
+
 def plugin_filename(stem: str, target_platform: str) -> str:
     base = f"nexaloid_plugin_{stem}"
     if target_platform.startswith("windows-"):
@@ -152,7 +162,7 @@ def stage_rust(
         ROOT / "bindings/rust/nexaloid-sys/native" / target_platform,
         ROOT / "bindings" / "rust" / f"nexaloid-sys-{target_platform}" / "native",
     )
-    runtime_libs = core_libs(target_platform) + ensure_plugin_libs(
+    runtime_libs = rust_core_libs(target_platform) + ensure_plugin_libs(
         target_platform, zig_target
     )
     for native in native_dirs:
@@ -163,7 +173,7 @@ def stage_rust(
 def stage_rust_platform_crate(target_platform: str, zig_target: str | None = None) -> None:
     stage_rust_data()
     native = ROOT / "bindings" / "rust" / f"nexaloid-sys-{target_platform}" / "native"
-    for src in core_libs(target_platform):
+    for src in rust_core_libs(target_platform):
         copy_file(src, native / src.name)
     for src in ensure_plugin_libs(target_platform, zig_target):
         copy_file(src, native / src.name)

@@ -153,7 +153,8 @@ pub type NxTokenCallback = Option<
     ),
 >;
 
-#[link(name = "nexaloid")]
+#[cfg_attr(windows, link(name = "nexaloid"))]
+#[cfg_attr(not(windows), link(name = "nexaloid", kind = "static"))]
 extern "C" {
     // Raw C ABI declarations. Higher-level crates should use nexaloid instead of calling these directly.
     pub fn nx_engine_new(config: *const NxConfig, out_engine: *mut *mut NxEngine) -> NxStatus;

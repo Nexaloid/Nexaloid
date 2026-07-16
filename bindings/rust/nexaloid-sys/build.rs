@@ -91,11 +91,4 @@ fn main() {
     }
 
     println!("cargo:rustc-link-search=native={}", native_dir.display());
-    if target.contains("apple-darwin") {
-        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/..");
-    } else if !target.contains("windows") {
-        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/..");
-    }
 }

@@ -9,6 +9,8 @@ Build scripts stage the core library, plugins, dictionary, and HMM data beside
 the final executable; the high-level `nexaloid` crate adds the entity model.
 Bundled path helpers resolve that portable runtime layout without embedding
 Cargo registry or source checkout paths.
+Rust executables link the core statically on Unix so the layout remains
+portable without downstream linker flags; plugins remain dynamic.
 The raw `NxMode` enum includes `Search`, which preserves and expands the Accurate path, and `RecallSearch`, which also adds explicit lattice candidates.
 Set `NxConfig.preserve_whitespace = 1` to keep pure whitespace tokens; the default is `0`.
 

@@ -452,6 +452,11 @@ jobs:
               test -f "bindings/rust/nexaloid-sys-$platform/$expected"
               grep -Fxq "$expected" <<<"$package_files"
             done
+            if [[ "$platform" != windows-* ]]; then
+              expected="native/libnexaloid.a"
+              test -f "bindings/rust/nexaloid-sys-$platform/$expected"
+              grep -Fxq "$expected" <<<"$package_files"
+            fi
           done
 
           python tools/rust_portability_regression.py

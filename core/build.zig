@@ -16,6 +16,20 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(lib);
 
+    if (target.result.os.tag != .windows) {
+        const static_lib = b.addLibrary(.{
+            .linkage = .static,
+            .name = "nexaloid",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/nexaloid_ffi.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true,
+            }),
+        });
+        b.installArtifact(static_lib);
+    }
+
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/root.zig"),

@@ -43,6 +43,7 @@ target/<profile>/
 Distribute the executable with these sibling files and the complete
 `nexaloid-data/` directory. Runtime path helpers resolve only this portable
 layout and never depend on Cargo registry or source checkout paths.
+On Unix, the Rust executable links the core statically; plugins remain dynamic.
 
 ## Usage
 
