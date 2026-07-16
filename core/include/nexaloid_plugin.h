@@ -8,8 +8,8 @@
 extern "C" {
 #endif
 
-/* Plugin ABI version must match exactly to avoid layout mismatches. */
-#define NX_PLUGIN_ABI_VERSION 1
+/* Plugin ABI version declares the input layout; hosts reject unsupported versions. */
+#define NX_PLUGIN_ABI_VERSION 2
 
 /* Opaque plugin instance. Its lifecycle is owned by plugin init/free functions. */
 typedef struct NxPlugin NxPlugin;
@@ -34,11 +34,22 @@ typedef struct {
     uint32_t kind;
 } NxPluginInfo;
 
-/* Read-only plugin input. text is length-delimited and not guaranteed NUL-terminated. */
+/* Scanner output borrowed from the core for the duration of the callback. */
+typedef struct {
+    uint32_t codepoint;
+    uint32_t start_byte;
+    uint32_t end_byte;
+    uint32_t char_index;
+    uint16_t char_class;
+    uint16_t flags;
+} NxPluginChar;
+
+/* Read-only plugin input. ABI v2 appends chars; the v1 prefix is unchanged. */
 typedef struct {
     const char *text;
     size_t text_len;
     uint32_t char_len;
+    const NxPluginChar *chars;
 } NxPluginInput;
 
 /* Plugin candidates use char offsets; core maps them back to byte offsets.

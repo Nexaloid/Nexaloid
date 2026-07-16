@@ -147,6 +147,8 @@ def assert_entity_plugin_tokenizer(plugin_path: Path, artifact_path: Path) -> No
             ("欧盟委员会发布公告。", "欧盟委员会"),
             ("韩国财政部公布数据。", "韩国财政部"),
             ("美国国务院发表声明。", "美国国务院"),
+            ("【恒通股份在山东成立智力数据科技公司 注册资本5000万】天眼查App显示，近日，山东恒通智力数据科技有限公司成立，法定...", "智力数据科技公司"),
+            ("【海口市政府、海南医科大学、九州通医药集团签署战略合作协议】7月15日。", "海南医科大学"),
         ):
             entities = [
                 token.text
@@ -161,6 +163,8 @@ def assert_entity_plugin_tokenizer(plugin_path: Path, artifact_path: Path) -> No
             ("国家开发银行湖南省", "国家开发银行湖南省"),
             ("超卓航科：控股股东", "超卓航科：控股股东"),
             ("公司上涨实现季度增长", "公司上涨实现"),
+            ("限制数据中心", "限制数据中心"),
+            ("随着数据中心", "随着数据中心"),
         ):
             entities = [token for token in tokenizer.tokenize(text) if token.source == "plugin" and token.flags == 4]
             assert rejected not in {token.text for token in entities}, (text, entities)

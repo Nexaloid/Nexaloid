@@ -6,7 +6,8 @@ const c = if (builtin.os.tag == .windows) @cImport({
 const lattice_mod = @import("../lattice/lattice.zig");
 const types = @import("../types.zig");
 
-const abi_version = 1;
+const min_abi_version = 1;
+const max_abi_version = 2;
 const candidate_provider_kind = 1;
 const max_plugin_candidates_base = 1024;
 const max_plugin_candidates_per_char = 64;
@@ -20,11 +21,29 @@ const NxPluginInfo = extern struct {
     kind: u32,
 };
 
+const NxPluginChar = extern struct {
+    codepoint: u32,
+    start_byte: u32,
+    end_byte: u32,
+    char_index: u32,
+    char_class: u16,
+    flags: u16,
+};
+
 const NxPluginInput = extern struct {
     text: [*]const u8,
     text_len: usize,
     char_len: u32,
+    chars: ?[*]const NxPluginChar,
 };
+
+comptime {
+    std.debug.assert(@sizeOf(NxPluginChar) == @sizeOf(types.NxChar));
+    std.debug.assert(@alignOf(NxPluginChar) == @alignOf(types.NxChar));
+    for (.{ "codepoint", "start_byte", "end_byte", "char_index", "char_class", "flags" }) |field| {
+        std.debug.assert(@offsetOf(NxPluginChar, field) == @offsetOf(types.NxChar, field));
+    }
+}
 
 const NxPluginCandidate = extern struct {
     start_char: u32,
@@ -69,6 +88,7 @@ pub const LoadedPlugin = struct {
             .text = text.ptr,
             .text_len = text.len,
             .char_len = @intCast(chars.len),
+            .chars = @ptrCast(chars.ptr),
         };
 
         if (self.provide_candidates_fn(self.instance, &input, onCandidate, &ctx) != 0) return error.PluginProvideFailed;
@@ -101,7 +121,7 @@ pub fn load(allocator: std.mem.Allocator, path: [*:0]const u8, config_json: ?[*:
         .kind = 0,
     };
     if (get_info_fn(instance, &info) != 0) return error.PluginInfoFailed;
-    if (info.abi_version != abi_version) return error.PluginAbiMismatch;
+    if (info.abi_version < min_abi_version or info.abi_version > max_abi_version) return error.PluginAbiMismatch;
     if (info.kind != candidate_provider_kind) return error.PluginKindMismatch;
 
     return .{

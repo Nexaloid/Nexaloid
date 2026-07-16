@@ -328,7 +328,7 @@ UTF-8 text
 | Entity Recognizer | 7 | 实体识别 | ❌ 预留 |
 | Normalizer | 8 | 文本归一化 | ❌ 预留 |
 
-插件通过 `nx_load_plugin` 加载，以字符偏移形式向 lattice 写入候选，核心会在 Viterbi 解码前映射回字节偏移。
+插件通过 `nx_load_plugin` 加载。ABI v2 会把 Scanner 已生成的码点、偏移、字符类别和 flags 直接交给 CandidateProvider，避免插件再次扫描 UTF-8；核心加载器继续兼容 ABI v1。插件以字符偏移形式向 lattice 写入候选，核心会在 Viterbi 解码前映射回字节偏移。插件边若与已加载用户词 Span 重叠，除非两者 Span 完全相同，否则会被拒绝，因此插件不能从主路径删除显式用户词。
 
 ### HMM 插件
 
@@ -380,7 +380,7 @@ python tools/stage_assets.py
 加载插件时可直接传入 artifact 路径，也可使用 JSON 配置：
 
 ```json
-{"artifact":"data/entity/entity_bmes_perceptron.nxbmes","score_per_char":60.0,"edge_penalty":10.0,"min_chars":2,"max_chars":64,"flags":4}
+{"artifact":"data/entity/entity_bmes_perceptron.nxbmes","score_per_char":3.0,"edge_penalty":10.0,"min_margin":35.0,"min_chars":2,"max_chars":64,"flags":4}
 ```
 
 Python 包会同时暴露内置模型和插件路径：
@@ -396,7 +396,13 @@ tokenizer.load_plugin(
 )
 ```
 
-候选分数为 `score_per_char * 字符数 - edge_penalty`。ASCII 实体要求 ASCII 边界；输出 token 的 `source=plugin`，`flags` 默认为 `4`，与 HMM 插件使用的 `1`/`2` 不冲突。内置的 release-safe 模型只使用 THUOCL（MIT）、JD 评论（Apache-2.0）和确定性合成样本，manifest 中的 dev F1 为 `0.793487`、test F1 为 `0.864987`。与其他插件相同，加载后批量分词当前会串行执行。
+每个解码实体都要通过 `min_margin` 的平均逐字符 emission margin 门槛；模型通用词表中已有的词不会再次作为实体输出。候选分数为 `min(400, score_per_char * margin - edge_penalty)`，因此长度本身不能稳定压过词典路径。插件会在加载时建立特征索引，并用高精度 gate 跳过缺少强实体信号文本的完整 Viterbi 推理。Unicode 空白和标点是硬边界；`·`、`-`、`‐`、`‑`、`&`、`/` 仅在两侧均为字母或数字时可保留在实体内部。ASCII 实体仍要求 ASCII 边界。输出 token 的 `source=plugin`，`flags` 默认为 `4`，与 HMM 插件使用的 `1`/`2` 不冲突。内置的 release-safe 模型只使用 THUOCL（MIT）、JD 评论（Apache-2.0）和确定性合成样本，manifest 中的 dev F1 为 `0.793487`、test F1 为 `0.864987`。与其他插件相同，加载后批量分词当前会串行执行。
+
+可用交错轮次和中位数门槛测量插件开销：
+
+```powershell
+python tools/entity_plugin_benchmark.py news.jsonl.gz --dict finance.tsv --rounds 7 --max-overhead 5
+```
 
 ---
 

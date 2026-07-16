@@ -328,7 +328,7 @@ All bindings call the same core engine. With the same input and dictionary, toke
 | Entity Recognizer | 7 | Entity recognition | Reserved |
 | Normalizer | 8 | Text normalization | Reserved |
 
-Plugins are loaded through `nx_load_plugin`. They write candidates into the lattice using character offsets, and the core maps those offsets back to byte offsets before Viterbi decoding. A plugin edge that overlaps a loaded user-dictionary span is rejected unless both edges have the same span, so plugins cannot remove an explicit user word from the main path.
+Plugins are loaded through `nx_load_plugin`. ABI v2 gives CandidateProviders the scanner's codepoints, offsets, character classes, and flags, avoiding a second UTF-8 scan; the core loader remains compatible with ABI v1 providers. Plugins write candidates into the lattice using character offsets, and the core maps those offsets back to byte offsets before Viterbi decoding. A plugin edge that overlaps a loaded user-dictionary span is rejected unless both edges have the same span, so plugins cannot remove an explicit user word from the main path.
 
 ### HMM Plugin
 
@@ -396,7 +396,13 @@ tokenizer.load_plugin(
 )
 ```
 
-For each decoded entity, `min_margin` filters the average per-character emission margin. Terms already present in the model's general lexicon are not emitted, keeping this CandidateProvider focused on unknown entities. Accepted scores are `min(400, score_per_char * margin - edge_penalty)`, so length alone cannot dominate dictionary paths. Unicode whitespace and punctuation are hard boundaries; `·`, `-`, `‐`, `‑`, `&`, and `/` remain internal only when both neighbors are letters or digits. ASCII entities still require ASCII boundaries. Emitted tokens use `source=plugin`, and `flags` defaults to `4` so it does not overlap the HMM plugin's `1`/`2` values. The bundled release-safe model is trained from THUOCL (MIT), JD comments (Apache-2.0), and deterministic synthetic examples; its manifest reports dev F1 `0.793487` and test F1 `0.864987`. As with every loaded plugin, batch tokenization is currently serialized.
+For each decoded entity, `min_margin` filters the average per-character emission margin. Terms already present in the model's general lexicon are not emitted, keeping this CandidateProvider focused on unknown entities. Accepted scores are `min(400, score_per_char * margin - edge_penalty)`, so length alone cannot dominate dictionary paths. Model features are indexed at load time, and a high-precision gate skips full Viterbi inference on text without a strong entity signal. Unicode whitespace and punctuation are hard boundaries; `·`, `-`, `‐`, `‑`, `&`, and `/` remain internal only when both neighbors are letters or digits. ASCII entities still require ASCII boundaries. Emitted tokens use `source=plugin`, and `flags` defaults to `4` so it does not overlap the HMM plugin's `1`/`2` values. The bundled release-safe model is trained from THUOCL (MIT), JD comments (Apache-2.0), and deterministic synthetic examples; its manifest reports dev F1 `0.793487` and test F1 `0.864987`. As with every loaded plugin, batch tokenization is currently serialized.
+
+Measure plugin overhead on a gzipped news JSONL corpus with interleaved rounds and a median threshold:
+
+```powershell
+python tools/entity_plugin_benchmark.py news.jsonl.gz --dict finance.tsv --rounds 7 --max-overhead 5
+```
 
 ---
 
