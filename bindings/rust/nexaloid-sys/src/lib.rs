@@ -1,22 +1,60 @@
 use std::ffi::{c_char, c_void};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+fn executable_file(relative: impl AsRef<Path>) -> PathBuf {
+    let relative = relative.as_ref();
+    let Some(parent) = std::env::current_exe()
+        .ok()
+        .and_then(|executable| executable.parent().map(Path::to_path_buf))
+    else {
+        return relative.to_path_buf();
+    };
+    let direct = parent.join(relative);
+    if direct.is_file() {
+        return direct;
+    }
+    let cargo_subdir = parent
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| matches!(name, "deps" | "examples" | "benches"));
+    if cargo_subdir {
+        if let Some(profile) = parent.parent() {
+            let staged = profile.join(relative);
+            if staged.is_file() {
+                return staged;
+            }
+        }
+    }
+    direct
+}
+
+fn core_library_name() -> &'static str {
+    if cfg!(windows) {
+        "nexaloid.dll"
+    } else if cfg!(target_os = "macos") {
+        "libnexaloid.dylib"
+    } else {
+        "libnexaloid.so"
+    }
+}
 
 pub fn bundled_dict_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("data")
-        .join("dict")
-        .join("nexaloid.nxdict")
+    bundled_data_path("dict/nexaloid.nxdict")
 }
 
 pub fn bundled_hmm_artifact_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("data")
-        .join("hmm")
-        .join("bmes_hmm_wordhub_lattice.nxhmm")
+    bundled_data_path("hmm/bmes_hmm_wordhub_lattice.nxhmm")
+}
+
+pub fn bundled_data_path(relative: impl AsRef<Path>) -> PathBuf {
+    executable_file(Path::new("nexaloid-data").join(relative))
 }
 
 pub fn bundled_native_dir() -> PathBuf {
-    PathBuf::from(env!("NEXALOID_NATIVE_DIR"))
+    executable_file(core_library_name())
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default()
 }
 
 fn bundled_plugin_path(stem: &str) -> PathBuf {
@@ -27,7 +65,8 @@ fn bundled_plugin_path(stem: &str) -> PathBuf {
     } else {
         "so"
     };
-    bundled_native_dir().join(format!("nexaloid_plugin_{stem}.{extension}"))
+    let name = format!("nexaloid_plugin_{stem}.{extension}");
+    executable_file(name)
 }
 
 pub fn bundled_hmm_plugin_path() -> PathBuf {

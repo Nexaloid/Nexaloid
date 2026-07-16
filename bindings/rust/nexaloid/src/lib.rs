@@ -12,21 +12,7 @@ pub fn bundled_hmm_plugin_path() -> std::path::PathBuf {
 }
 
 pub fn bundled_entity_artifact_path() -> std::path::PathBuf {
-    let package = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let repository = package
-        .join("..")
-        .join("..")
-        .join("..")
-        .join("data")
-        .join("entity")
-        .join("entity_bmes_perceptron.nxbmes");
-    if repository.exists() {
-        return repository;
-    }
-    package
-        .join("data")
-        .join("entity")
-        .join("entity_bmes_perceptron.nxbmes")
+    sys::bundled_data_path("entity/entity_bmes_perceptron.nxbmes")
 }
 
 pub fn bundled_entity_plugin_path() -> std::path::PathBuf {

@@ -30,6 +30,20 @@ Each platform crate also bundles the entity and HMM plugins. Use
 hard-coding platform-specific filenames. Their model paths are exposed by
 `bundled_entity_artifact_path()` and `bundled_hmm_artifact_path()`.
 
+`cargo build` stages a portable runtime beside the final executable:
+
+```text
+target/<profile>/
+  nexaloid.dll | libnexaloid.so | libnexaloid.dylib
+  nexaloid_plugin_entity_bmes.*
+  nexaloid_plugin_hmm_lattice.*
+  nexaloid-data/{dict,hmm,entity}/...
+```
+
+Distribute the executable with these sibling files and the complete
+`nexaloid-data/` directory. Runtime path helpers resolve only this portable
+layout and never depend on Cargo registry or source checkout paths.
+
 ## Usage
 
 ```rust
@@ -65,6 +79,8 @@ Whitespace tokens are filtered by default; use `Tokenizer::new_default_with_whit
 ```powershell
 cd core
 zig build
-cd ..\bindings\rust\nexaloid
+cd ..
+python tools/stage_assets.py --rust-only
+cd bindings\rust\nexaloid
 cargo test
 ```

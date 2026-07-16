@@ -136,21 +136,32 @@ def stage_python() -> None:
         copy_file(src, pkg / "native" / src.name)
 
 
+def stage_rust_data() -> None:
+    copy_file(ROOT / "data/dict/nexaloid.nxdict", ROOT / "bindings/rust/nexaloid-sys/data/dict/nexaloid.nxdict")
+    copy_hmm(ROOT / "bindings/rust/nexaloid-sys/data/hmm")
+    copy_entity(ROOT / "bindings/rust/nexaloid/data/entity")
+
+
 def stage_rust(
     target_platform: str | None = None,
     zig_target: str | None = None,
 ) -> None:
-    copy_file(ROOT / "data/dict/nexaloid.nxdict", ROOT / "bindings/rust/nexaloid-sys/data/dict/nexaloid.nxdict")
-    copy_hmm(ROOT / "bindings/rust/nexaloid-sys/data/hmm")
-    copy_entity(ROOT / "bindings/rust/nexaloid/data/entity")
-    native = ROOT / "bindings/rust/nexaloid-sys/native" / (target_platform or platform_tag())
-    for src in core_libs(target_platform):
-        copy_file(src, native / src.name)
-    for src in ensure_plugin_libs(target_platform, zig_target):
-        copy_file(src, native / src.name)
+    stage_rust_data()
+    target_platform = target_platform or platform_tag()
+    native_dirs = (
+        ROOT / "bindings/rust/nexaloid-sys/native" / target_platform,
+        ROOT / "bindings" / "rust" / f"nexaloid-sys-{target_platform}" / "native",
+    )
+    runtime_libs = core_libs(target_platform) + ensure_plugin_libs(
+        target_platform, zig_target
+    )
+    for native in native_dirs:
+        for src in runtime_libs:
+            copy_file(src, native / src.name)
 
 
 def stage_rust_platform_crate(target_platform: str, zig_target: str | None = None) -> None:
+    stage_rust_data()
     native = ROOT / "bindings" / "rust" / f"nexaloid-sys-{target_platform}" / "native"
     for src in core_libs(target_platform):
         copy_file(src, native / src.name)

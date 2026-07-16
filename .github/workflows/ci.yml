@@ -179,6 +179,8 @@ jobs:
         env:
           NEXALOID_REQUIRE_BUNDLED_PLUGINS: "1"
           RUSTFLAGS: -L native=${{ github.workspace }}/core/zig-out/lib
+      - name: Test portable Rust distribution
+        run: python tools/rust_portability_regression.py
 
   go-regression:
     name: Go binding regression

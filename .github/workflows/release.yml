@@ -454,6 +454,8 @@ jobs:
             done
           done
 
+          python tools/rust_portability_regression.py
+
           for target in "${targets[@]}"; do
             platform="${target%%:*}"
             publish_crate "bindings/rust/nexaloid-sys-$platform/Cargo.toml"
