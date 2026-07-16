@@ -20,7 +20,7 @@ PY_SRC = ROOT / "bindings" / "python" / "src"
 if str(PY_SRC) not in sys.path:
     sys.path.insert(0, str(PY_SRC))
 
-from nexaloid import Tokenizer  # noqa: E402
+from nexaloid import Mode, Tokenizer  # noqa: E402
 
 
 def plugin_name() -> str:
@@ -143,10 +143,10 @@ def assert_entity_plugin_tokenizer(plugin_path: Path, artifact_path: Path) -> No
     try:
         tokenizer.load_plugin(plugin_path, json.dumps({"artifact": str(artifact_path)}))
         for text, expected in (
-            ("阿强加入云海数据研究院", "云海数据研究院"),
-            ("团队计划前往北京开展调研。", "北京"),
-            ("观测人员记录到了梅花鹿。", "梅花鹿"),
-            ("展会上重点介绍了东风本田的配置。", "东风本田"),
+            ("团队计划前往云海数据研究院开展调研。", "云海数据研究院"),
+            ("欧盟委员会发布公告。", "欧盟委员会"),
+            ("韩国财政部公布数据。", "韩国财政部"),
+            ("美国国务院发表声明。", "美国国务院"),
         ):
             entities = [
                 token.text
@@ -154,6 +154,61 @@ def assert_entity_plugin_tokenizer(plugin_path: Path, artifact_path: Path) -> No
                 if token.source == "plugin" and token.flags == 4
             ]
             assert expected in entities, (text, entities)
+
+        for text, rejected in (
+            ("央行票据 支持财政部", "央行票据 支持财政部"),
+            ("事关国民经济", "事关国民经济"),
+            ("国家开发银行湖南省", "国家开发银行湖南省"),
+            ("超卓航科：控股股东", "超卓航科：控股股东"),
+            ("公司上涨实现季度增长", "公司上涨实现"),
+        ):
+            entities = [token for token in tokenizer.tokenize(text) if token.source == "plugin" and token.flags == 4]
+            assert rejected not in {token.text for token in entities}, (text, entities)
+            assert all(not any(boundary in token.text for boundary in " \t\r\n：，。；！？、《》") for token in entities)
+            assert all(token.score <= 400.0 for token in entities)
+
+        book_title = tokenizer.tokenize("《欧盟委员会》发布公告")
+        assert "欧盟委员会" in {token.text for token in book_title if token.source == "plugin"}
+        for word in ("公司", "上涨", "实现", "季度"):
+            assert not [token for token in tokenizer.tokenize(word) if token.source == "plugin"], word
+    finally:
+        tokenizer.close()
+
+    tokenizer = Tokenizer(dict_path=plugin_path.parent / "missing.tsv")
+    try:
+        tokenizer.load_plugin(
+            plugin_path,
+            json.dumps({"artifact": str(artifact_path), "min_margin": 1_000_000.0}),
+        )
+        assert not [token for token in tokenizer.tokenize("云海数据研究院") if token.source == "plugin"]
+    finally:
+        tokenizer.close()
+
+
+def assert_user_dictionary_beats_entity_superspans(
+    plugin_path: Path,
+    artifact_path: Path,
+    tmp_path: Path,
+) -> None:
+    user_dict = tmp_path / "entity-user-dict.tsv"
+    words = ("国民经济", "控股股东", "股份有限公司", "开发银行", "财政部")
+    user_dict.write_text("".join(f"{word}\t-5\tn\n" for word in words), encoding="utf-8")
+    tokenizer = Tokenizer(dict_path=tmp_path / "missing.tsv")
+    try:
+        tokenizer.load_userdict(user_dict)
+        tokenizer.load_plugin(plugin_path, json.dumps({"artifact": str(artifact_path)}))
+        cases = (
+            ("事关国民经济", "国民经济"),
+            ("超卓航科：控股股东拟减持股份", "控股股东"),
+            ("某股份有限公司发布公告", "股份有限公司"),
+            ("国家开发银行湖南省分行", "开发银行"),
+            ("央行票据 支持财政部", "财政部"),
+        )
+        for mode in (Mode.ACCURATE, Mode.SEARCH):
+            for text, word in cases:
+                start = text.index(word)
+                spans = {(token.text, token.start_char, token.end_char) for token in tokenizer.tokenize(text, mode)}
+                assert (word, start, start + len(word)) in spans, (mode, text, spans)
     finally:
         tokenizer.close()
 
@@ -221,6 +276,7 @@ def main() -> int:
         )
         if entity_artifact.exists():
             assert_entity_plugin_tokenizer(entity_plugin_path, entity_artifact)
+            assert_user_dictionary_beats_entity_superspans(entity_plugin_path, entity_artifact, tmp_path)
             assert_entity_hmm_coexist(entity_plugin_path, entity_artifact, hmm_plugin_path)
         else:
             print("entity BMES artifact not present; inference checks skipped")

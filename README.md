@@ -328,7 +328,7 @@ All bindings call the same core engine. With the same input and dictionary, toke
 | Entity Recognizer | 7 | Entity recognition | Reserved |
 | Normalizer | 8 | Text normalization | Reserved |
 
-Plugins are loaded through `nx_load_plugin`. They write candidates into the lattice using character offsets, and the core maps those offsets back to byte offsets before Viterbi decoding.
+Plugins are loaded through `nx_load_plugin`. They write candidates into the lattice using character offsets, and the core maps those offsets back to byte offsets before Viterbi decoding. A plugin edge that overlaps a loaded user-dictionary span is rejected unless both edges have the same span, so plugins cannot remove an explicit user word from the main path.
 
 ### HMM Plugin
 
@@ -380,7 +380,7 @@ python tools/stage_assets.py
 Load the plugin with either an artifact path or JSON configuration:
 
 ```json
-{"artifact":"data/entity/entity_bmes_perceptron.nxbmes","score_per_char":60.0,"edge_penalty":10.0,"min_chars":2,"max_chars":64,"flags":4}
+{"artifact":"data/entity/entity_bmes_perceptron.nxbmes","score_per_char":3.0,"edge_penalty":10.0,"min_margin":35.0,"min_chars":2,"max_chars":64,"flags":4}
 ```
 
 Python packages expose both bundled paths:
@@ -396,7 +396,7 @@ tokenizer.load_plugin(
 )
 ```
 
-Candidate scores are `score_per_char * character_length - edge_penalty`. ASCII entities require ASCII boundaries; emitted tokens use `source=plugin`, and `flags` defaults to `4` so it does not overlap the HMM plugin's `1`/`2` values. The bundled release-safe model is trained from THUOCL (MIT), JD comments (Apache-2.0), and deterministic synthetic examples; its manifest reports dev F1 `0.793487` and test F1 `0.864987`. As with every loaded plugin, batch tokenization is currently serialized.
+For each decoded entity, `min_margin` filters the average per-character emission margin. Terms already present in the model's general lexicon are not emitted, keeping this CandidateProvider focused on unknown entities. Accepted scores are `min(400, score_per_char * margin - edge_penalty)`, so length alone cannot dominate dictionary paths. Unicode whitespace and punctuation are hard boundaries; `·`, `-`, `‐`, `‑`, `&`, and `/` remain internal only when both neighbors are letters or digits. ASCII entities still require ASCII boundaries. Emitted tokens use `source=plugin`, and `flags` defaults to `4` so it does not overlap the HMM plugin's `1`/`2` values. The bundled release-safe model is trained from THUOCL (MIT), JD comments (Apache-2.0), and deterministic synthetic examples; its manifest reports dev F1 `0.793487` and test F1 `0.864987`. As with every loaded plugin, batch tokenization is currently serialized.
 
 ---
 

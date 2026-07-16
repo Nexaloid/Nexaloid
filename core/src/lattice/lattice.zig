@@ -28,9 +28,21 @@ pub const Lattice = struct {
     pub fn addEdge(self: *Lattice, edge: types.NxEdge) !void {
         std.debug.assert(edge.start_char < edge.end_char);
         std.debug.assert(edge.end_char <= self.char_len);
+        if (edge.source == .plugin and self.pluginOverlapsUserWord(edge)) return;
         try self.ensureBuckets();
         try self.edges.append(self.allocator, edge);
         try self.buckets[edge.start_char].append(self.allocator, edge);
+    }
+
+    fn pluginOverlapsUserWord(self: *const Lattice, plugin_edge: types.NxEdge) bool {
+        // ponytail: candidate counts are capped; index user spans only if this scan becomes measurable.
+        for (self.edges.items) |edge| {
+            if (edge.source != .user_dict) continue;
+            const overlaps = plugin_edge.start_char < edge.end_char and edge.start_char < plugin_edge.end_char;
+            const same_span = plugin_edge.start_char == edge.start_char and plugin_edge.end_char == edge.end_char;
+            if (overlaps and !same_span) return true;
+        }
+        return false;
     }
 
     pub fn edgeCount(self: *const Lattice) usize {
@@ -174,6 +186,56 @@ test "lattice stores and filters edges by start char" {
     try std.testing.expectEqual(@as(usize, 2), lattice.edgeCount());
     try std.testing.expectEqual(@as(usize, 1), ctx.count);
     try std.testing.expectEqual(@as(u32, 2), ctx.last_word_id);
+}
+
+test "plugin edges cannot overlap user dictionary words" {
+    var lattice = Lattice.init(std.testing.allocator, 6);
+    defer lattice.deinit();
+
+    try lattice.addEdge(.{
+        .start_char = 2,
+        .end_char = 4,
+        .start_byte = 6,
+        .end_byte = 12,
+        .word_id = 1,
+        .score = -5.0,
+        .pos_id = 0,
+        .source = .user_dict,
+    });
+    try lattice.addEdge(.{
+        .start_char = 0,
+        .end_char = 6,
+        .start_byte = 0,
+        .end_byte = 18,
+        .word_id = 0,
+        .score = 350.0,
+        .pos_id = 0,
+        .source = .plugin,
+    });
+    try lattice.addEdge(.{
+        .start_char = 2,
+        .end_char = 3,
+        .start_byte = 6,
+        .end_byte = 9,
+        .word_id = 0,
+        .score = 110.0,
+        .pos_id = 0,
+        .source = .plugin,
+    });
+    try lattice.addEdge(.{
+        .start_char = 2,
+        .end_char = 4,
+        .start_byte = 6,
+        .end_byte = 12,
+        .word_id = 0,
+        .score = 60.0,
+        .pos_id = 0,
+        .source = .plugin,
+    });
+
+    try std.testing.expectEqual(@as(usize, 2), lattice.edgeCount());
+    try std.testing.expectEqual(types.NxSource.user_dict, lattice.edges.items[0].source);
+    try std.testing.expectEqual(types.NxSource.plugin, lattice.edges.items[1].source);
 }
 
 test "build lattice from matcher" {
