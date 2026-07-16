@@ -31,6 +31,7 @@ fn main() {
     .map(PathBuf::from)
     .unwrap_or_else(|_| manifest_dir.join("native").join(platform));
 
+    println!("cargo:rustc-env=NEXALOID_NATIVE_DIR={}", dir.display());
     if dir.exists() {
         println!("cargo:rustc-link-search=native={}", dir.display());
         if !target.contains("windows") {

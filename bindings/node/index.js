@@ -25,6 +25,16 @@ const packagedHmmManifest = path.join(__dirname, "data", "hmm", hmmManifestName)
 const repoHmmManifest = path.join(root, "data", "hmm", hmmManifestName);
 const hmmArtifactPath = fs.existsSync(repoHmmArtifact) ? repoHmmArtifact : packagedHmmArtifact;
 const hmmManifestPath = fs.existsSync(repoHmmManifest) ? repoHmmManifest : packagedHmmManifest;
+const hmmPluginName = process.platform === "win32"
+  ? "nexaloid_plugin_hmm_lattice.dll"
+  : process.platform === "darwin"
+    ? "nexaloid_plugin_hmm_lattice.dylib"
+    : "nexaloid_plugin_hmm_lattice.so";
+const packagedHmmPlugin = path.join(prebuildDir, hmmPluginName);
+const repoHmmPlugin = ["bin", "lib"]
+  .map((dir) => path.join(root, "core", "zig-out", dir, hmmPluginName))
+  .find((candidate) => fs.existsSync(candidate));
+const hmmPluginPath = repoHmmPlugin || packagedHmmPlugin;
 const entityArtifactName = "entity_bmes_perceptron.nxbmes";
 const entityManifestName = "entity_bmes_perceptron.manifest.json";
 const packagedEntityArtifact = path.join(__dirname, "data", "entity", entityArtifactName);
@@ -87,6 +97,7 @@ module.exports = {
   hmmArtifactPath,
   hmmManifestPath,
   hmmManifest: () => JSON.parse(fs.readFileSync(hmmManifestPath, "utf8")),
+  hmmPluginPath,
   entityArtifactPath,
   entityManifestPath,
   entityManifest: () => JSON.parse(fs.readFileSync(entityManifestPath, "utf8")),

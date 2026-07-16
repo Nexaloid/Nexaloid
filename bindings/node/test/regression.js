@@ -10,7 +10,8 @@ const {
   entityPluginPath,
   hmmArtifactPath,
   hmmManifest,
-  hmmManifestPath
+  hmmManifestPath,
+  hmmPluginPath
 } = require("..");
 
 const tokenizer = new Tokenizer();
@@ -49,6 +50,12 @@ tokenizer.clearRules();
 if (!fs.existsSync(hmmArtifactPath)) throw new Error(`missing HMM artifact: ${hmmArtifactPath}`);
 if (!fs.existsSync(hmmManifestPath)) throw new Error(`missing HMM manifest: ${hmmManifestPath}`);
 if (hmmManifest().quality.lattice_heldout.token_f1 < 0.98) throw new Error("bad HMM manifest quality");
+if (!fs.existsSync(hmmPluginPath)) throw new Error(`missing HMM plugin: ${hmmPluginPath}`);
+const hmmTokenizer = new Tokenizer();
+hmmTokenizer.loadPlugin(hmmPluginPath, hmmArtifactPath);
+const hmmWords = hmmTokenizer.lcut("并参与杭算项目");
+if (hmmWords.join("/") !== "并/参与/杭算/项目") throw new Error(`HMM plugin inference failed: ${hmmWords.join("/")}`);
+hmmTokenizer.close();
 if (!fs.existsSync(entityArtifactPath)) throw new Error(`missing entity artifact: ${entityArtifactPath}`);
 if (!fs.existsSync(entityManifestPath)) throw new Error(`missing entity manifest: ${entityManifestPath}`);
 if (entityManifest().quality.test.f1 < 0.86) throw new Error("bad entity manifest quality");

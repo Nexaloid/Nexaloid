@@ -15,6 +15,29 @@ pub fn bundled_hmm_artifact_path() -> PathBuf {
         .join("bmes_hmm_wordhub_lattice.nxhmm")
 }
 
+pub fn bundled_native_dir() -> PathBuf {
+    PathBuf::from(env!("NEXALOID_NATIVE_DIR"))
+}
+
+fn bundled_plugin_path(stem: &str) -> PathBuf {
+    let extension = if cfg!(windows) {
+        "dll"
+    } else if cfg!(target_os = "macos") {
+        "dylib"
+    } else {
+        "so"
+    };
+    bundled_native_dir().join(format!("nexaloid_plugin_{stem}.{extension}"))
+}
+
+pub fn bundled_hmm_plugin_path() -> PathBuf {
+    bundled_plugin_path("hmm_lattice")
+}
+
+pub fn bundled_entity_plugin_path() -> PathBuf {
+    bundled_plugin_path("entity_bmes")
+}
+
 #[repr(C)]
 pub struct NxEngine {
     // Opaque native handle; Rust must never construct or inspect this value.

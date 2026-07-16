@@ -89,31 +89,33 @@ def plugin_libs(target_platform: str | None = None) -> list[Path]:
     return out
 
 
-def ensure_plugin_libs(target_platform: str | None = None) -> list[Path]:
+def ensure_plugin_libs(
+    target_platform: str | None = None,
+    zig_target: str | None = None,
+) -> list[Path]:
     target_platform = target_platform or platform_tag()
     out_dir = ROOT / "core" / "zig-out" / "lib"
     out_dir.mkdir(parents=True, exist_ok=True)
     for stem, source in PLUGIN_SOURCES.items():
         name = plugin_filename(stem, target_platform)
-        if any((ROOT / "core/zig-out").rglob(name)):
+        if zig_target is None and any((ROOT / "core/zig-out").rglob(name)):
             continue
-        subprocess.run(
-            [
-                "zig",
-                "build-lib",
-                "-O",
-                "ReleaseFast",
-                "-mcpu",
-                "baseline",
-                "-dynamic",
-                "-lc",
-                "--name",
-                f"nexaloid_plugin_{stem}",
-                str(source),
-            ],
-            cwd=ROOT,
-            check=True,
-        )
+        command = [
+            "zig",
+            "build-lib",
+            "-O",
+            "ReleaseFast",
+            "-mcpu",
+            "baseline",
+            "-dynamic",
+            "-lc",
+            "--name",
+            f"nexaloid_plugin_{stem}",
+        ]
+        if zig_target is not None:
+            command.extend(("-target", zig_target))
+        command.append(str(source))
+        subprocess.run(command, cwd=ROOT, check=True)
         emitted = ROOT / (name if target_platform.startswith("windows-") else f"lib{name}")
         copy_file(emitted, out_dir / name)
     libs = plugin_libs(target_platform)
@@ -134,18 +136,25 @@ def stage_python() -> None:
         copy_file(src, pkg / "native" / src.name)
 
 
-def stage_rust(target_platform: str | None = None) -> None:
+def stage_rust(
+    target_platform: str | None = None,
+    zig_target: str | None = None,
+) -> None:
     copy_file(ROOT / "data/dict/nexaloid.nxdict", ROOT / "bindings/rust/nexaloid-sys/data/dict/nexaloid.nxdict")
     copy_hmm(ROOT / "bindings/rust/nexaloid-sys/data/hmm")
     copy_entity(ROOT / "bindings/rust/nexaloid/data/entity")
     native = ROOT / "bindings/rust/nexaloid-sys/native" / (target_platform or platform_tag())
     for src in core_libs(target_platform):
         copy_file(src, native / src.name)
+    for src in ensure_plugin_libs(target_platform, zig_target):
+        copy_file(src, native / src.name)
 
 
-def stage_rust_platform_crate(target_platform: str) -> None:
+def stage_rust_platform_crate(target_platform: str, zig_target: str | None = None) -> None:
     native = ROOT / "bindings" / "rust" / f"nexaloid-sys-{target_platform}" / "native"
     for src in core_libs(target_platform):
+        copy_file(src, native / src.name)
+    for src in ensure_plugin_libs(target_platform, zig_target):
         copy_file(src, native / src.name)
 
 
@@ -171,19 +180,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--node-addon", action="store_true")
     parser.add_argument("--platform")
+    parser.add_argument("--zig-target")
     parser.add_argument("--rust-only", action="store_true")
     parser.add_argument("--rust-platform-crate", action="store_true")
     args = parser.parse_args()
     if args.rust_platform_crate:
         if args.platform is None:
             raise SystemExit("--rust-platform-crate requires --platform")
-        stage_rust_platform_crate(args.platform)
+        stage_rust_platform_crate(args.platform, args.zig_target)
         return
     if args.rust_only:
-        stage_rust(args.platform)
+        stage_rust(args.platform, args.zig_target)
         return
     stage_python()
-    stage_rust(args.platform)
+    stage_rust(args.platform, args.zig_target)
     stage_node(args.node_addon)
 
 

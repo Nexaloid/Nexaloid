@@ -36,10 +36,15 @@ def plugin_lib_names(platform: str) -> tuple[str, str]:
 
 def native_plugins(platform: str) -> list[Path]:
     out = []
+    missing = []
     for name in plugin_lib_names(platform):
         matches = list((ROOT / "core" / "zig-out").rglob(name))
         if matches:
             out.append(matches[0])
+        else:
+            missing.append(name)
+    if missing:
+        raise FileNotFoundError(f"missing native plugins for {platform}: {', '.join(missing)}")
     return out
 
 

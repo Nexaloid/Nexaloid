@@ -25,6 +25,11 @@ darwin-x64
 darwin-arm64
 ```
 
+Each platform crate also bundles the entity and HMM plugins. Use
+`bundled_entity_plugin_path()` and `bundled_hmm_plugin_path()` instead of
+hard-coding platform-specific filenames. Their model paths are exposed by
+`bundled_entity_artifact_path()` and `bundled_hmm_artifact_path()`.
+
 ## Usage
 
 ```rust

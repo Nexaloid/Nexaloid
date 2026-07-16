@@ -7,6 +7,10 @@ pub fn bundled_hmm_artifact_path() -> std::path::PathBuf {
     sys::bundled_hmm_artifact_path()
 }
 
+pub fn bundled_hmm_plugin_path() -> std::path::PathBuf {
+    sys::bundled_hmm_plugin_path()
+}
+
 pub fn bundled_entity_artifact_path() -> std::path::PathBuf {
     let package = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let repository = package
@@ -23,6 +27,10 @@ pub fn bundled_entity_artifact_path() -> std::path::PathBuf {
         .join("data")
         .join("entity")
         .join("entity_bmes_perceptron.nxbmes")
+}
+
+pub fn bundled_entity_plugin_path() -> std::path::PathBuf {
+    sys::bundled_entity_plugin_path()
 }
 
 #[derive(Debug)]
@@ -327,7 +335,10 @@ fn check(status: sys::NxStatus) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Mode, Source, Tokenizer};
+    use super::{
+        bundled_entity_artifact_path, bundled_entity_plugin_path, bundled_hmm_artifact_path,
+        bundled_hmm_plugin_path, Mode, Source, Tokenizer,
+    };
 
     fn texts(tokens: Vec<super::Token>) -> Vec<String> {
         tokens.into_iter().map(|token| token.text).collect()
@@ -414,5 +425,44 @@ mod tests {
         assert_eq!(token.custom_rule_index(), Some(1));
         assert_eq!(Source::from_raw(99), Source::Unrecognized(99));
         tokenizer.clear_rules().unwrap();
+    }
+
+    #[test]
+    fn bundled_plugins_load_when_required() {
+        if std::env::var_os("NEXALOID_REQUIRE_BUNDLED_PLUGINS").is_none() {
+            return;
+        }
+
+        let hmm_plugin = bundled_hmm_plugin_path();
+        let entity_plugin = bundled_entity_plugin_path();
+        assert!(hmm_plugin.is_file(), "missing {}", hmm_plugin.display());
+        assert!(
+            entity_plugin.is_file(),
+            "missing {}",
+            entity_plugin.display()
+        );
+
+        let mut hmm = Tokenizer::new_default().unwrap();
+        let hmm_plugin = hmm_plugin.to_string_lossy();
+        let hmm_artifact = bundled_hmm_artifact_path();
+        let hmm_artifact = hmm_artifact.to_string_lossy();
+        hmm.load_plugin(&hmm_plugin, Some(&hmm_artifact)).unwrap();
+        assert_eq!(
+            texts(hmm.tokenize("并参与杭算项目", Mode::Accurate).unwrap()),
+            vec!["并", "参与", "杭算", "项目"]
+        );
+
+        let mut entity = Tokenizer::new_default().unwrap();
+        let entity_plugin = entity_plugin.to_string_lossy();
+        let entity_artifact = bundled_entity_artifact_path()
+            .to_string_lossy()
+            .replace('\\', "/");
+        let config = format!(r#"{{"artifact":"{entity_artifact}"}}"#);
+        entity.load_plugin(&entity_plugin, Some(&config)).unwrap();
+        assert!(entity
+            .tokenize("欧盟委员会", Mode::Accurate)
+            .unwrap()
+            .iter()
+            .any(|token| token.text == "欧盟委员会" && token.source == Source::Plugin));
     }
 }

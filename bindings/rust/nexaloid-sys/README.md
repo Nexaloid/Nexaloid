@@ -18,6 +18,9 @@ For rule tokens, a nonzero `flags` value is the custom rule's 1-based JSON array
 
 ```rust
 let dict = nexaloid_sys::bundled_dict_path();
+let native = nexaloid_sys::bundled_native_dir();
+let entity_plugin = nexaloid_sys::bundled_entity_plugin_path();
+let hmm_plugin = nexaloid_sys::bundled_hmm_plugin_path();
 println!("{}", dict.display());
 ```
 

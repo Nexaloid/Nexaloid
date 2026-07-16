@@ -40,6 +40,26 @@ Whitespace tokens are filtered by default. Use `preserveWhitespace` when exact s
 const tokenizer = new nexaloid.Tokenizer({ preserveWhitespace: true });
 ```
 
+## Bundled Plugins
+
+The package exposes both plugin and model paths:
+
+```js
+const {
+  Tokenizer,
+  entityArtifactPath,
+  entityPluginPath,
+  hmmArtifactPath,
+  hmmPluginPath
+} = require("@nexaloid/nexaloid");
+
+const hmm = new Tokenizer();
+hmm.loadPlugin(hmmPluginPath, hmmArtifactPath);
+
+const entity = new Tokenizer();
+entity.loadPlugin(entityPluginPath, JSON.stringify({ artifact: entityArtifactPath }));
+```
+
 ## Token Contract
 
 `Mode.SEARCH` preserves every non-whitespace token on the Accurate path, including single-character and repeated-position tokens, and adds in-boundary Han 2-gram / 3-gram expansions. `Mode.RECALL_SEARCH` also adds explicit lattice candidates. `cutForSearch()` keeps search-term behavior by filtering one-character terms and deduplicating text.

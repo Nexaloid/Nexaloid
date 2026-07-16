@@ -129,7 +129,9 @@ jobs:
         run: python -m pip install --force-reinstall bindings/python/dist/*.whl
         shell: bash
       - name: Regression test Python binding
-        run: python -c "from nexaloid import Tokenizer; assert '/'.join(Tokenizer().lcut('南京市长江大桥')) == '南京市/长江大桥'"
+        run: |
+          python -c "from nexaloid import Tokenizer; t=Tokenizer(); assert '/'.join(t.lcut('南京市长江大桥')) == '南京市/长江大桥'; assert t.lcut('小明硕士毕业', HMM=True) == ['小明', '硕士', '毕业']; t.close()"
+          python -c 'import json; from nexaloid import Tokenizer, entity_artifact_path, entity_plugin_path; t=Tokenizer(); t.load_plugin(entity_plugin_path(), json.dumps({"artifact": str(entity_artifact_path())})); assert any(x.text == "欧盟委员会" and x.source == "plugin" for x in t.tokenize("欧盟委员会")); t.close()'
       - name: Upload PyPI wheel
         uses: actions/upload-artifact@v6
         with:
@@ -365,7 +367,7 @@ jobs:
           PY
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal
-      - name: Publish platform native crates
+      - name: Build, validate, and publish platform native crates
         shell: bash
         run: |
           sleep_for_rate_limit() {
@@ -413,22 +415,47 @@ jobs:
             return 1
           }
 
-          for target in \
-            linux-x64:x86_64-linux-gnu \
-            windows-x64:x86_64-windows-gnu \
-            darwin-x64:x86_64-macos \
-            darwin-arm64:aarch64-macos \
-            linux-arm64:aarch64-linux-gnu \
-            windows-arm64:aarch64-windows-gnu \
-            linux-musl:x86_64-linux-musl \
-            linux-armv7:arm-linux-gnueabihf \
+          targets=(
+            linux-x64:x86_64-linux-gnu
+            windows-x64:x86_64-windows-gnu
+            darwin-x64:x86_64-macos
+            darwin-arm64:aarch64-macos
+            linux-arm64:aarch64-linux-gnu
+            windows-arm64:aarch64-windows-gnu
+            linux-musl:x86_64-linux-musl
+            linux-armv7:arm-linux-gnueabihf
             riscv64:riscv64-linux-gnu
-          do
+          )
+
+          for target in "${targets[@]}"; do
             platform="${target%%:*}"
             zig_target="${target##*:}"
             rm -rf core/zig-out
             (cd core && zig build -Doptimize=ReleaseFast -Dtarget="$zig_target" --summary none)
-            python tools/stage_assets.py --rust-platform-crate --platform "$platform"
+            python tools/stage_assets.py \
+              --rust-platform-crate \
+              --platform "$platform" \
+              --zig-target "$zig_target"
+          done
+
+          for target in "${targets[@]}"; do
+            platform="${target%%:*}"
+            manifest="bindings/rust/nexaloid-sys-$platform/Cargo.toml"
+            package_files="$(cargo package --allow-dirty --list --manifest-path "$manifest")"
+            case "$platform" in
+              windows-*) extension=dll ;;
+              darwin-*) extension=dylib ;;
+              *) extension=so ;;
+            esac
+            for stem in entity_bmes hmm_lattice; do
+              expected="native/nexaloid_plugin_${stem}.${extension}"
+              test -f "bindings/rust/nexaloid-sys-$platform/$expected"
+              grep -Fxq "$expected" <<<"$package_files"
+            done
+          done
+
+          for target in "${targets[@]}"; do
+            platform="${target%%:*}"
             publish_crate "bindings/rust/nexaloid-sys-$platform/Cargo.toml"
           done
         env:
@@ -595,6 +622,8 @@ jobs:
         run: npm run test:binding
       - name: Regression test packed npm package
         run: python ${{ github.workspace }}/tools/npm_package_regression.py
+        env:
+          NEXALOID_REQUIRE_ALL_PREBUILDS: "1"
       - name: Publish to npm
         run: npm publish --provenance --access public
 

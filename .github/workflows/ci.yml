@@ -163,14 +163,21 @@ jobs:
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal
       - name: Build native library
         run: zig build -Doptimize=ReleaseFast
         working-directory: core
+      - name: Stage Rust package assets
+        run: python tools/stage_assets.py --rust-platform-crate --platform linux-x64 --zig-target x86_64-linux-gnu
       - name: Test Rust binding
         run: cargo test --manifest-path bindings/rust/nexaloid/Cargo.toml
         env:
+          NEXALOID_REQUIRE_BUNDLED_PLUGINS: "1"
           RUSTFLAGS: -L native=${{ github.workspace }}/core/zig-out/lib
 
   go-regression:
@@ -297,6 +304,19 @@ jobs:
               ;;
           esac
         shell: bash
+      - name: Stage Rust platform crate
+        run: python tools/stage_assets.py --rust-platform-crate --platform ${{ matrix.target.platform }}
+      - name: Check Rust platform payload
+        shell: bash
+        run: |
+          case "${{ matrix.target.platform }}" in
+            windows-*) extension=dll ;;
+            darwin-*) extension=dylib ;;
+            *) extension=so ;;
+          esac
+          for stem in entity_bmes hmm_lattice; do
+            test -f "bindings/rust/nexaloid-sys-${{ matrix.target.platform }}/native/nexaloid_plugin_${stem}.${extension}"
+          done
       - name: Package native SDK
         run: python tools/package_native_sdk.py --version 0.0.0-ci --platform ${{ matrix.target.platform }} --language all --out-dir dist/native-ci
 
