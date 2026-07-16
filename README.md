@@ -2,7 +2,7 @@
 
 This branch tracks the latest released Nexaloid C entry files.
 
-Version: 0.1.27
+Version: 0.1.28
 
 ## Use
 
