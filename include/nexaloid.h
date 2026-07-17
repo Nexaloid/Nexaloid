@@ -110,6 +110,9 @@ typedef void (*NxBatchTokenCallback)(
     void *user_data
 );
 
+/* Return the native runtime semantic version. The static string must not be freed. */
+const char *nx_runtime_version(void);
+
 /* Create an engine. On success, callers must release it with nx_engine_free. */
 NxStatus nx_engine_new(const NxConfig *config, NxEngine **out_engine);
 
