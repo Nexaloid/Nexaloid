@@ -1,6 +1,8 @@
 use std::ffi::{c_char, c_void};
 use std::path::{Path, PathBuf};
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn executable_file(relative: impl AsRef<Path>) -> PathBuf {
     let relative = relative.as_ref();
     let Some(parent) = std::env::current_exe()
@@ -35,6 +37,35 @@ fn core_library_name() -> &'static str {
         "libnexaloid.dylib"
     } else {
         "libnexaloid.so"
+    }
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+extern "system" {
+    #[link_name = "GetModuleHandleA"]
+    fn get_module_handle_a(module_name: *const c_char) -> *mut c_void;
+    #[link_name = "GetProcAddress"]
+    fn get_proc_address(module: *mut c_void, procedure_name: *const c_char) -> *mut c_void;
+}
+
+pub fn runtime_version_ptr() -> *const c_char {
+    #[cfg(windows)]
+    unsafe {
+        let module = get_module_handle_a(b"nexaloid.dll\0".as_ptr().cast());
+        if module.is_null() {
+            return std::ptr::null();
+        }
+        let symbol = get_proc_address(module, b"nx_runtime_version\0".as_ptr().cast());
+        if symbol.is_null() {
+            return std::ptr::null();
+        }
+        let function: unsafe extern "C" fn() -> *const c_char = std::mem::transmute(symbol);
+        function()
+    }
+    #[cfg(not(windows))]
+    unsafe {
+        nx_runtime_version()
     }
 }
 
@@ -157,6 +188,8 @@ pub type NxTokenCallback = Option<
 #[cfg_attr(not(windows), link(name = "nexaloid", kind = "static"))]
 extern "C" {
     // Raw C ABI declarations. Higher-level crates should use nexaloid instead of calling these directly.
+    #[cfg(not(windows))]
+    pub fn nx_runtime_version() -> *const c_char;
     pub fn nx_engine_new(config: *const NxConfig, out_engine: *mut *mut NxEngine) -> NxStatus;
     pub fn nx_engine_free(engine: *mut NxEngine);
     pub fn nx_set_rule_config(

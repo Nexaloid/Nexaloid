@@ -92,11 +92,14 @@ tokens, _ := tokenizer.Tokenize("武汉市长江大桥", nexaloid.Accurate)
 ### Rust
 
 ```rust
-use nexaloid::{Mode, Tokenizer};
+use nexaloid::{runtime_version, Mode, Tokenizer, VERSION};
 
+assert_eq!(runtime_version()?, VERSION);
 let tokenizer = Tokenizer::new_default()?;
 let tokens = tokenizer.tokenize("武汉市长江大桥", Mode::Accurate)?;
 ```
+
+每次创建 Rust engine 前都会比对 `nexaloid` crate、`nexaloid-sys` 与原生运行时版本。原生版本缺失或不一致时会在 engine 创建前失败；插件 ABI 与模型格式在加载插件时即时校验。
 
 ---
 
@@ -412,6 +415,7 @@ python tools/entity_plugin_benchmark.py news.jsonl.gz --dict finance.tsv --round
 
 | 函数 | 用途 |
 |------|------|
+| `nx_runtime_version` | 返回原生运行时语义版本 |
 | `nx_engine_new` | 创建引擎实例 |
 | `nx_engine_free` | 销毁引擎 |
 | `nx_tokenize` | 单条文本分词 |

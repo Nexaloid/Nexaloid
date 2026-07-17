@@ -16,6 +16,7 @@ const types = @import("types.zig");
 
 const allocator = std.heap.c_allocator;
 const dict_magic_v4 = "NXDICT1\x00";
+const runtime_version = "0.0.0-dev.0";
 
 const NxStatus = enum(c_int) {
     ok = 0,
@@ -67,6 +68,10 @@ pub const NxEngine = struct {
     // Runtime-added words get stable non-zero ids inside this engine instance.
     next_word_id: u32 = 1,
 };
+
+export fn nx_runtime_version() callconv(.c) [*:0]const u8 {
+    return runtime_version;
+}
 
 export fn nx_engine_new(config: ?*const NxConfig, out_engine: ?*?*NxEngine) callconv(.c) NxStatus {
     const out = out_engine orelse return .invalid_config;

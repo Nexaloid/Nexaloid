@@ -11,6 +11,8 @@ Bundled path helpers resolve that portable runtime layout without embedding
 Cargo registry or source checkout paths.
 Rust executables link the core statically on Unix so the layout remains
 portable without downstream linker flags; plugins remain dynamic.
+`VERSION` is the sys crate version, and `runtime_version_ptr()` reads the
+native runtime version symbol without silently accepting an outdated Windows DLL.
 The raw `NxMode` enum includes `Search`, which preserves and expands the Accurate path, and `RecallSearch`, which also adds explicit lattice candidates.
 Set `NxConfig.preserve_whitespace = 1` to keep pure whitespace tokens; the default is `0`.
 

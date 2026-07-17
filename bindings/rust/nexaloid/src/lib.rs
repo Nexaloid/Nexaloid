@@ -3,6 +3,8 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::path::Path;
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub fn bundled_hmm_artifact_path() -> std::path::PathBuf {
     sys::bundled_hmm_artifact_path()
 }
@@ -23,6 +25,44 @@ pub fn bundled_entity_plugin_path() -> std::path::PathBuf {
 pub struct Error {
     pub status: sys::NxStatus,
     pub message: String,
+}
+
+fn compatibility_error(message: String) -> Error {
+    Error {
+        status: sys::NxStatus::InvalidConfig,
+        message,
+    }
+}
+
+pub fn runtime_version() -> Result<String, Error> {
+    runtime_version_from_ptr(sys::runtime_version_ptr())
+}
+
+fn runtime_version_from_ptr(pointer: *const c_char) -> Result<String, Error> {
+    if pointer.is_null() {
+        return Err(compatibility_error(
+            "native runtime is missing nx_runtime_version; found an outdated Nexaloid library"
+                .to_string(),
+        ));
+    }
+    let version = unsafe { CStr::from_ptr(pointer) }.to_str().map_err(|_| {
+        compatibility_error("native runtime returned an invalid version".to_string())
+    })?;
+    Ok(version.to_string())
+}
+
+fn check_component_version(component: &str, expected: &str, actual: &str) -> Result<(), Error> {
+    if expected == actual {
+        return Ok(());
+    }
+    Err(compatibility_error(format!(
+        "{component} version mismatch: expected {expected}, found {actual}"
+    )))
+}
+
+fn ensure_runtime_compatible() -> Result<(), Error> {
+    check_component_version("nexaloid-sys crate", VERSION, sys::VERSION)?;
+    check_component_version("native runtime", VERSION, &runtime_version()?)
 }
 
 #[derive(Clone, Copy)]
@@ -135,6 +175,7 @@ impl Tokenizer {
     }
 
     pub fn new(config: sys::NxConfig) -> Result<Self, Error> {
+        ensure_runtime_compatible()?;
         let mut engine = std::ptr::null_mut();
         check(unsafe { sys::nx_engine_new(&config, &mut engine) })?;
         Ok(Self { engine })
@@ -323,11 +364,23 @@ fn check(status: sys::NxStatus) -> Result<(), Error> {
 mod tests {
     use super::{
         bundled_entity_artifact_path, bundled_entity_plugin_path, bundled_hmm_artifact_path,
-        bundled_hmm_plugin_path, Mode, Source, Tokenizer,
+        bundled_hmm_plugin_path, check_component_version, runtime_version,
+        runtime_version_from_ptr, Mode, Source, Tokenizer, VERSION,
     };
 
     fn texts(tokens: Vec<super::Token>) -> Vec<String> {
         tokens.into_iter().map(|token| token.text).collect()
+    }
+
+    #[test]
+    fn runtime_version_matches_crate() {
+        assert_eq!(runtime_version().unwrap(), VERSION);
+        let missing = runtime_version_from_ptr(std::ptr::null())
+            .expect_err("missing runtime version symbol must fail");
+        assert!(missing.message.contains("outdated Nexaloid library"));
+        let error = check_component_version("native runtime", VERSION, "0.0.0-old")
+            .expect_err("mismatched runtime must fail");
+        assert!(error.message.contains("version mismatch"));
     }
 
     #[test]

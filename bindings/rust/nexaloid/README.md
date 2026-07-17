@@ -45,6 +45,11 @@ Distribute the executable with these sibling files and the complete
 layout and never depend on Cargo registry or source checkout paths.
 On Unix, the Rust executable links the core statically; plugins remain dynamic.
 
+`Tokenizer` initialization verifies that the `nexaloid`, `nexaloid-sys`, and
+native runtime versions match exactly. `runtime_version()` exposes the loaded
+native version for diagnostics. Plugin ABI and model-format mismatches fail
+when `load_plugin` initializes that plugin.
+
 ## Usage
 
 ```rust

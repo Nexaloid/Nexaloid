@@ -50,13 +50,18 @@ def main() -> None:
     replace(
         "bindings/rust/nexaloid-sys/Cargo.toml",
         r'nexaloid-sys-([a-z0-9-]+) = \{ version = "[^"]+", path = "../nexaloid-sys-\1" \}',
-        rf'nexaloid-sys-\1 = {{ version = "{version}", path = "../nexaloid-sys-\1" }}',
+        rf'nexaloid-sys-\1 = {{ version = "={version}", path = "../nexaloid-sys-\1" }}',
     )
     replace("bindings/rust/nexaloid/Cargo.toml", r'version = "[^"]+"', f'version = "{version}"')
     replace(
         "bindings/rust/nexaloid/Cargo.toml",
         r'nexaloid-sys = \{ version = "[^"]+", path = "../nexaloid-sys" \}',
-        f'nexaloid-sys = {{ version = "{version}", path = "../nexaloid-sys" }}',
+        f'nexaloid-sys = {{ version = "={version}", path = "../nexaloid-sys" }}',
+    )
+    replace(
+        "core/src/nexaloid_ffi.zig",
+        r'const runtime_version = "[^"]+";',
+        f'const runtime_version = "{version}";',
     )
     replace("bindings/rust/nexaloid/Cargo.lock", r'version = "[^"]+"', f'version = "{version}"')
 

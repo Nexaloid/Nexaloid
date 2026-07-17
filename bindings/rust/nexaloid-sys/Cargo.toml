@@ -13,28 +13,28 @@ include = ["build.rs", "src/**", "data/dict/**", "data/hmm/**", "Cargo.toml", "R
 path = "src/lib.rs"
 
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))'.dependencies]
-nexaloid-sys-linux-x64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-linux-x64" }
+nexaloid-sys-linux-x64 = { version = "=0.0.0-dev.0", path = "../nexaloid-sys-linux-x64" }
 
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "musl"))'.dependencies]
-nexaloid-sys-linux-musl = { version = "0.0.0-dev.0", path = "../nexaloid-sys-linux-musl" }
+nexaloid-sys-linux-musl = { version = "=0.0.0-dev.0", path = "../nexaloid-sys-linux-musl" }
 
 [target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
-nexaloid-sys-linux-arm64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-linux-arm64" }
+nexaloid-sys-linux-arm64 = { version = "=0.0.0-dev.0", path = "../nexaloid-sys-linux-arm64" }
 
 [target.'cfg(all(target_os = "linux", target_arch = "arm"))'.dependencies]
-nexaloid-sys-linux-armv7 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-linux-armv7" }
+nexaloid-sys-linux-armv7 = { version = "=0.0.0-dev.0", path = "../nexaloid-sys-linux-armv7" }
 
 [target.'cfg(all(target_os = "linux", target_arch = "riscv64"))'.dependencies]
-nexaloid-sys-riscv64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-riscv64" }
+nexaloid-sys-riscv64 = { version = "=0.0.0-dev.0", path = "../nexaloid-sys-riscv64" }
 
 [target.'cfg(all(target_os = "windows", target_arch = "x86_64"))'.dependencies]
-nexaloid-sys-windows-x64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-windows-x64" }
+nexaloid-sys-windows-x64 = { version = "=0.0.0-dev.0", path = "../nexaloid-sys-windows-x64" }
 
 [target.'cfg(all(target_os = "windows", target_arch = "aarch64"))'.dependencies]
-nexaloid-sys-windows-arm64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-windows-arm64" }
+nexaloid-sys-windows-arm64 = { version = "=0.0.0-dev.0", path = "../nexaloid-sys-windows-arm64" }
 
 [target.'cfg(all(target_os = "macos", target_arch = "x86_64"))'.dependencies]
-nexaloid-sys-darwin-x64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-darwin-x64" }
+nexaloid-sys-darwin-x64 = { version = "=0.0.0-dev.0", path = "../nexaloid-sys-darwin-x64" }
 
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
-nexaloid-sys-darwin-arm64 = { version = "0.0.0-dev.0", path = "../nexaloid-sys-darwin-arm64" }
+nexaloid-sys-darwin-arm64 = { version = "=0.0.0-dev.0", path = "../nexaloid-sys-darwin-arm64" }

@@ -92,11 +92,14 @@ tokens, _ := tokenizer.Tokenize("武汉市长江大桥", nexaloid.Accurate)
 ### Rust
 
 ```rust
-use nexaloid::{Mode, Tokenizer};
+use nexaloid::{runtime_version, Mode, Tokenizer, VERSION};
 
+assert_eq!(runtime_version()?, VERSION);
 let tokenizer = Tokenizer::new_default()?;
 let tokens = tokenizer.tokenize("武汉市长江大桥", Mode::Accurate)?;
 ```
+
+Every Rust engine initialization compares the `nexaloid` crate, `nexaloid-sys`, and native runtime versions. Missing or mismatched native versions fail before an engine is created; plugin ABI and model-format checks run when a plugin is loaded.
 
 ---
 
@@ -412,6 +415,7 @@ All exported functions use the `nx_` prefix. The main header is `core/include/ne
 
 | Function | Purpose |
 |----------|---------|
+| `nx_runtime_version` | Return the native runtime semantic version |
 | `nx_engine_new` | Create an engine instance |
 | `nx_engine_free` | Destroy an engine |
 | `nx_tokenize` | Tokenize one input |

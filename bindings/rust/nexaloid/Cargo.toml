@@ -10,7 +10,7 @@ build = "build.rs"
 include = ["build.rs", "src/**", "data/entity/**", "Cargo.toml", "README.md"]
 
 [dependencies]
-nexaloid-sys = { version = "0.0.0-dev.0", path = "../nexaloid-sys" }
+nexaloid-sys = { version = "=0.0.0-dev.0", path = "../nexaloid-sys" }
 
 [lib]
 path = "src/lib.rs"

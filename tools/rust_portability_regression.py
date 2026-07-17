@@ -66,7 +66,8 @@ inherits = "release"
     (root / "src" / "main.rs").write_text(
         r'''use nexaloid::{
     bundled_entity_artifact_path, bundled_entity_plugin_path,
-    bundled_hmm_artifact_path, bundled_hmm_plugin_path, Mode, Source, Tokenizer,
+    bundled_hmm_artifact_path, bundled_hmm_plugin_path, runtime_version, Mode, Source,
+    Tokenizer, VERSION,
 };
 
 fn main() {
@@ -88,8 +89,29 @@ fn main() {
         );
     }
     assert_eq!(nexaloid_sys::bundled_native_dir(), root);
+    assert_eq!(runtime_version().unwrap(), VERSION);
 
     let mut tokenizer = Tokenizer::new_default().unwrap();
+    let base = tokenizer
+        .tokenize("南京市长江大桥", Mode::Accurate)
+        .unwrap();
+    assert_eq!(
+        base.iter().map(|token| token.text.as_str()).collect::<Vec<_>>(),
+        vec!["南京市", "长江大桥"]
+    );
+
+    let mut hmm = Tokenizer::new_default().unwrap();
+    let hmm_plugin = bundled_hmm_plugin_path();
+    let hmm_artifact = bundled_hmm_artifact_path();
+    let hmm_model = hmm_artifact.to_string_lossy();
+    hmm.load_plugin(&hmm_plugin.to_string_lossy(), Some(&hmm_model))
+        .unwrap();
+    assert!(hmm
+        .tokenize("并参与杭算项目", Mode::Accurate)
+        .unwrap()
+        .iter()
+        .any(|token| token.text == "杭算" && token.source == Source::Plugin));
+
     let plugin = bundled_entity_plugin_path();
     let model = bundled_entity_artifact_path()
         .to_string_lossy()
@@ -103,7 +125,7 @@ fn main() {
         .unwrap()
         .iter()
         .any(|token| token.text == "欧盟委员会" && token.source == Source::Plugin));
-    println!("portable entity plugin load passed");
+    println!("portable runtime smoke passed: {VERSION}");
 }
 ''',
         encoding="utf-8",
