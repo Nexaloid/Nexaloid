@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import gzip
 import hashlib
 import json
@@ -24,6 +25,36 @@ if str(PY_SRC) not in sys.path:
     sys.path.insert(0, str(PY_SRC))
 
 from nexaloid import Mode, Tokenizer, entity_artifact_path, entity_plugin_path  # noqa: E402
+
+
+def stabilize_process() -> bool:
+    if sys.platform == "win32":
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel.GetProcessAffinityMask.argtypes = (
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_size_t),
+        )
+        kernel.SetProcessAffinityMask.argtypes = (ctypes.c_void_p, ctypes.c_size_t)
+        kernel.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        process = kernel.GetCurrentProcess()
+        process_mask = ctypes.c_size_t()
+        system_mask = ctypes.c_size_t()
+        if not kernel.GetProcessAffinityMask(process, ctypes.byref(process_mask), ctypes.byref(system_mask)):
+            return False
+        preferred = process_mask.value & ~0b11 or process_mask.value
+        cpu = preferred & -preferred
+        return bool(kernel.SetProcessAffinityMask(process, cpu) and kernel.SetPriorityClass(process, 0x80))
+    if hasattr(os, "sched_getaffinity") and hasattr(os, "sched_setaffinity"):
+        try:
+            allowed = sorted(os.sched_getaffinity(0))
+            if allowed:
+                os.sched_setaffinity(0, {allowed[len(allowed) // 2]})
+                return True
+        except OSError:
+            return False
+    return False
 
 
 def load_articles(path: Path, expected_sha256: str | None) -> list[dict[str, str]]:
@@ -60,6 +91,7 @@ def main() -> int:
     if args.rounds < 1 or args.warmup < 0:
         parser.error("--rounds must be positive and --warmup must be non-negative")
 
+    process_stabilized = stabilize_process()
     articles = load_articles(args.corpus, args.corpus_sha256)
     baseline = Tokenizer()
     combined = Tokenizer()
@@ -91,13 +123,22 @@ def main() -> int:
 
         baseline_median = statistics.median(timings["dictionary"])
         combined_median = statistics.median(timings["dictionary_plugin"])
-        overhead = (combined_median / baseline_median - 1.0) * 100.0
+        raw_overhead = (combined_median / baseline_median - 1.0) * 100.0
+        paired_overheads = []
+        for index in range(0, args.rounds - 1, 2):
+            baseline_block = statistics.mean(timings["dictionary"][index : index + 2])
+            combined_block = statistics.mean(timings["dictionary_plugin"][index : index + 2])
+            paired_overheads.append((combined_block / baseline_block - 1.0) * 100.0)
+        overhead = statistics.median(paired_overheads) if paired_overheads else raw_overhead
         result = {
             "articles": len(articles),
             "rounds": args.rounds,
             "dictionary_median_ms": round(baseline_median * 1000, 3),
             "dictionary_plugin_median_ms": round(combined_median * 1000, 3),
             "overhead_percent": round(overhead, 3),
+            "raw_median_overhead_percent": round(raw_overhead, 3),
+            "paired_blocks": len(paired_overheads),
+            "process_stabilized": process_stabilized,
             "max_overhead_percent": args.max_overhead,
             "plugin_load_ms": round(plugin_load_ms, 3),
             "dictionary_tokens": counts["dictionary"][0],
