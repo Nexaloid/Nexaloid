@@ -1,8 +1,33 @@
+#include <atomic>
+#include <cstdlib>
 #include <iostream>
+#include <new>
 #include <stdexcept>
 #include <vector>
 
 #include <nexaloid.hpp>
+
+namespace {
+std::atomic<bool> fail_next_allocation{false};
+}
+
+void* operator new(std::size_t size) {
+    if (fail_next_allocation.exchange(false)) {
+        throw std::bad_alloc();
+    }
+    if (void* allocation = std::malloc(size)) {
+        return allocation;
+    }
+    throw std::bad_alloc();
+}
+
+void operator delete(void* allocation) noexcept {
+    std::free(allocation);
+}
+
+void operator delete(void* allocation, std::size_t) noexcept {
+    std::free(allocation);
+}
 
 void expect(nexaloid::Tokenizer& tokenizer, std::string_view text, const std::vector<std::string>& expected) {
     auto words = tokenizer.cut(text);
@@ -45,6 +70,17 @@ int main() {
     }
     if (!recall_saw_student) {
         throw std::runtime_error("recall search missing cross-boundary candidate");
+    }
+
+    bool saw_callback_allocation_failure = false;
+    fail_next_allocation = true;
+    try {
+        static_cast<void>(tokenizer.tokenize("南京市长江大桥"));
+    } catch (const std::bad_alloc&) {
+        saw_callback_allocation_failure = true;
+    }
+    if (!saw_callback_allocation_failure) {
+        throw std::runtime_error("callback allocation failure was not rethrown");
     }
 
     tokenizer.load_rules_json(R"({"version":1,"rules":[{"name":"stock","kind":"prefixed_number","prefixes":["SH"],"digits":{"min":6,"max":6},"score":80}]})");
