@@ -1,6 +1,10 @@
 package nexaloid
 
-import "testing"
+import (
+	"errors"
+	"sync"
+	"testing"
+)
 
 func TestTokenize(t *testing.T) {
 	tokenizer, err := New("../../../data/dict/nexaloid.tsv")
@@ -134,6 +138,57 @@ func TestCustomRules(t *testing.T) {
 	if err := tokenizer.ClearRules(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestClosedTokenizerReturnsStableError(t *testing.T) {
+	tokenizer, err := New("../../../data/dict/nexaloid.tsv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenizer.Close()
+	tokenizer.Close()
+
+	if _, err := tokenizer.Tokenize("测试", Accurate); !errors.Is(err, ErrTokenizerClosed) {
+		t.Fatalf("Tokenize() error = %v, want ErrTokenizerClosed", err)
+	}
+	if err := tokenizer.AddWord("测试词", 10); !errors.Is(err, ErrTokenizerClosed) {
+		t.Fatalf("AddWord() error = %v, want ErrTokenizerClosed", err)
+	}
+	if err := tokenizer.ClearRules(); !errors.Is(err, ErrTokenizerClosed) {
+		t.Fatalf("ClearRules() error = %v, want ErrTokenizerClosed", err)
+	}
+}
+
+func TestConcurrentTokenizeAndClose(t *testing.T) {
+	tokenizer, err := New("../../../data/dict/nexaloid.tsv")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for range 25 {
+				_, err := tokenizer.Tokenize("南京市长江大桥", Accurate)
+				if err != nil && !errors.Is(err, ErrTokenizerClosed) {
+					t.Errorf("unexpected tokenize error: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-start
+		tokenizer.Close()
+	}()
+	close(start)
+	wg.Wait()
 }
 
 func tokenTexts(tokens []Token) []string {

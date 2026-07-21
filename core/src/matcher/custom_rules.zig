@@ -35,6 +35,6 @@ pub const CustomRules = struct {
     }
 };
 
-pub fn emitAll(chars: []const types.NxChar, rules: *const CustomRules, start: usize, ctx: anytype, comptime emit: anytype) !void {
-    return matcher.emitAll(chars, rules.rules.items, start, ctx, emit);
+pub fn emitAll(chars: []const types.NxChar, rules: *const CustomRules, start: usize, budget: *usize, ctx: anytype, comptime emit: anytype) !void {
+    return matcher.emitAll(chars, rules.rules.items, start, budget, ctx, emit);
 }

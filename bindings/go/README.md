@@ -43,10 +43,16 @@ func main() {
 
 `Token.Source` uses the public `Source` type and its `String()` method returns the stable name. `Token.CustomRuleIndex()` returns the custom rule's 1-based JSON array index when the token came from `SourceRule` and `Flags` is nonzero.
 
+## Concurrency and lifecycle
+
+All methods serialize access to the native engine, so `Close` can safely race
+with tokenization or mutation. `Close` is idempotent. Methods called after
+close return `ErrTokenizerClosed`; use `errors.Is` when testing for it.
+
 ## Development
 
 ```powershell
 cd bindings/go
 $env:PATH = "$PWD\..\..\core\zig-out\bin;$env:PATH"
-go test ./...
+go test -race ./...
 ```

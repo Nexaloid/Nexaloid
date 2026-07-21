@@ -8,6 +8,12 @@ Whitespace tokens are filtered by default. Enable the binding's `preserveWhitesp
 
 Release assets publish C, C++, and Zig as separate native SDK zip files, alongside the combined native SDK. The `release/c`, `release/cpp`, and `release/zig` branches track the latest released entry files for users who prefer pulling a branch.
 
+The C ABI permits concurrent read-only tokenization on an engine without
+plugins. Engine mutation and `nx_engine_free` must never overlap any other call
+on that engine. Python and Go enforce this contract with an instance mutex;
+lower-level bindings leave synchronization to the caller. Input and worker
+limits are defined in `core/include/nexaloid.h`.
+
 ## C++
 
 ```powershell
@@ -34,7 +40,7 @@ cargo run --manifest-path bindings/rust/nexaloid/Cargo.toml --example regression
 ```powershell
 cd bindings/go
 $env:PATH = "$PWD\..\..\core\zig-out\bin;$env:PATH"
-go test ./nexaloid
+go test -race ./nexaloid
 ```
 
 ## Node.js

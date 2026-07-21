@@ -20,11 +20,23 @@ runs:
           *) echo "unsupported runner: ${RUNNER_OS}-${RUNNER_ARCH}" >&2; exit 1 ;;
         esac
         version="${{ inputs.version }}"
+        case "$version-$target" in
+          0.16.0-x86_64-linux) sha256="70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00" ;;
+          0.16.0-aarch64-linux) sha256="ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17" ;;
+          0.16.0-x86_64-macos) sha256="0387557ed1877bc6a2e1802c8391953baddba76081876301c522f52977b52ba7" ;;
+          0.16.0-aarch64-macos) sha256="b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489" ;;
+          *) echo "no pinned checksum for Zig $version on $target" >&2; exit 1 ;;
+        esac
         dir="$RUNNER_TEMP/zig-$version"
         archive="$RUNNER_TEMP/zig-$target-$version.tar.xz"
         mkdir -p "$dir"
         curl --fail --location --show-error --retry 5 --retry-delay 2 --retry-all-errors \
           --output "$archive" "https://ziglang.org/download/$version/zig-$target-$version.tar.xz"
+        actual_sha256="$(shasum -a 256 "$archive" | awk '{print $1}')"
+        if [ "$actual_sha256" != "$sha256" ]; then
+          echo "Zig archive checksum mismatch: expected $sha256, got $actual_sha256" >&2
+          exit 1
+        fi
         tar -xJf "$archive" --strip-components=1 -C "$dir"
         echo "$dir" >> "$GITHUB_PATH"
     - name: Install Zig
@@ -36,10 +48,18 @@ runs:
           throw "unsupported runner: $env:RUNNER_OS-$env:RUNNER_ARCH"
         }
         $version = "${{ inputs.version }}"
+        if ($version -ne "0.16.0") {
+          throw "no pinned checksum for Zig $version on x86_64-windows"
+        }
+        $expectedSha256 = "68659eb5f1e4eb1437a722f1dd889c5a322c9954607f5edcf337bc3684a75a7e"
         $dir = Join-Path $env:RUNNER_TEMP "zig-$version"
         $zip = Join-Path $env:RUNNER_TEMP "zig-$version.zip"
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
         Invoke-WebRequest -Uri "https://ziglang.org/download/$version/zig-x86_64-windows-$version.zip" -OutFile $zip
+        $actualSha256 = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actualSha256 -ne $expectedSha256) {
+          throw "Zig archive checksum mismatch: expected $expectedSha256, got $actualSha256"
+        }
         Expand-Archive -LiteralPath $zip -DestinationPath $env:RUNNER_TEMP -Force
         $expanded = Join-Path $env:RUNNER_TEMP "zig-x86_64-windows-$version"
         Get-ChildItem -LiteralPath $expanded | Move-Item -Destination $dir -Force

@@ -32,15 +32,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
+      - name: Enforce supply-chain policy
+        run: python tools/supply_chain_lint.py
       - name: Test Zig core
         run: zig build test
         working-directory: core
@@ -75,13 +77,13 @@ jobs:
             zig_target: aarch64-linux-gnu
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
       - name: Build native library
@@ -96,7 +98,7 @@ jobs:
           cp libnexaloid_plugin_entity_bmes.so core/zig-out/lib/nexaloid_plugin_entity_bmes.so
         shell: bash
       - name: Install Python build tools
-        run: python -m pip install -U build
+        run: python -m pip install build==1.5.0
       - name: Stage package assets
         run: python tools/stage_assets.py
       - name: Build Python wheel
@@ -106,7 +108,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y patchelf
-          python -m pip install auditwheel
+          python -m pip install auditwheel==6.7.0
           python -m auditwheel repair bindings/python/dist/*.whl -w bindings/python/wheelhouse
           rm bindings/python/dist/*.whl
           mv bindings/python/wheelhouse/*.whl bindings/python/dist/
@@ -127,7 +129,7 @@ jobs:
         language: [c, cpp, zig]
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
@@ -158,13 +160,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Set up Rust
@@ -187,20 +189,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.22"
       - name: Build native library
         run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Test Go binding
-        run: go test ./nexaloid
+        run: go test -race ./nexaloid
         working-directory: bindings/go
 
   node-package-regression:
@@ -218,17 +220,17 @@ jobs:
             zig_target: aarch64-linux-gnu
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
           package-manager-cache: false
@@ -276,13 +278,13 @@ jobs:
             zig_target: riscv64-linux-gnu
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Cross-build native library
@@ -346,7 +348,7 @@ jobs:
             packages: qemu-user-static gcc-riscv64-linux-gnu
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
@@ -377,20 +379,20 @@ jobs:
         python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python }}
       - name: Build native library
         run: zig build -Doptimize=ReleaseFast
         working-directory: core
       - name: Install Python build tools
-        run: python -m pip install -U build
+        run: python -m pip install build==1.5.0
       - name: Stage package assets
         run: python tools/stage_assets.py
       - name: Build Python wheel
@@ -400,7 +402,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y patchelf
-          python -m pip install auditwheel
+          python -m pip install auditwheel==6.7.0
           python -m auditwheel repair bindings/python/dist/*.whl -w bindings/python/wheelhouse
           rm bindings/python/dist/*.whl
           mv bindings/python/wheelhouse/*.whl bindings/python/dist/
@@ -422,17 +424,17 @@ jobs:
         node: [18, 20, 22, 24]
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node }}
           package-manager-cache: false

@@ -4,6 +4,7 @@ pub const max_custom_rules = 64;
 pub const max_prefixes = 32;
 pub const max_prefix_len = 32;
 pub const max_rule_len = 256;
+pub const max_sequence_parts = 32;
 
 pub const CustomRuleKind = enum {
     prefixed_number,

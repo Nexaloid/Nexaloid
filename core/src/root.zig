@@ -7,6 +7,7 @@ pub const lattice = @import("lattice/lattice.zig");
 pub const decoder = @import("decoder/viterbi.zig");
 pub const plugin = @import("plugin/loader.zig");
 pub const tokenizer = @import("tokenizer.zig");
+pub const ffi = @import("nexaloid_ffi.zig");
 
 test {
     _ = scanner;
@@ -18,4 +19,5 @@ test {
     _ = decoder;
     _ = plugin;
     _ = tokenizer;
+    _ = ffi;
 }

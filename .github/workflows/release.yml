@@ -36,13 +36,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Zig
         uses: ./.github/actions/setup-zig
         with:
           version: 0.16.0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
       - name: Test Zig core
@@ -85,9 +85,9 @@ jobs:
     runs-on: ${{ matrix.target.os }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python }}
       - name: Set release version
@@ -105,7 +105,7 @@ jobs:
         run: zig build -Doptimize=ReleaseFast
         working-directory: ${{ github.workspace }}/core
       - name: Install Python build tools
-        run: python -m pip install -U build
+        run: python -m pip install build==1.5.0
       - name: Stage package assets
         run: python ${{ github.workspace }}/tools/stage_assets.py
       - name: Build Python wheel
@@ -121,7 +121,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y patchelf
-          python -m pip install auditwheel
+          python -m pip install auditwheel==6.7.0
           python -m auditwheel repair bindings/python/dist/*.whl -w bindings/python/wheelhouse
           rm bindings/python/dist/*.whl
           mv bindings/python/wheelhouse/*.whl bindings/python/dist/
@@ -133,7 +133,7 @@ jobs:
           python -c "from nexaloid import Tokenizer; t=Tokenizer(); assert '/'.join(t.lcut('南京市长江大桥')) == '南京市/长江大桥'; assert t.lcut('小明硕士毕业', HMM=True) == ['小明', '硕士', '毕业']; t.close()"
           python -c 'import json; from nexaloid import Tokenizer, entity_artifact_path, entity_plugin_path; t=Tokenizer(); t.load_plugin(entity_plugin_path(), json.dumps({"artifact": str(entity_artifact_path())})); assert any(x.text == "欧盟委员会" and x.source == "plugin" for x in t.tokenize("欧盟委员会")); t.close()'
       - name: Upload PyPI wheel
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: pypi-${{ matrix.target.platform }}-py${{ matrix.python }}
           path: bindings/python/dist/*
@@ -148,13 +148,13 @@ jobs:
       id-token: write
     steps:
       - name: Download PyPI wheels
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: pypi-*
           path: dist
           merge-multiple: true
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
         with:
           packages-dir: dist
           skip-existing: true
@@ -197,9 +197,9 @@ jobs:
     runs-on: ${{ matrix.target.os }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Set release version
@@ -239,27 +239,106 @@ jobs:
               --language "$language"
           done
       - name: Upload native SDK artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: native-sdk-${{ matrix.target.platform }}
           path: dist/native/*.zip
 
+  release-evidence:
+    name: Generate checksums, SBOM, and provenance
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    needs: [pypi-build, native-sdk-build, cargo, npm]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+      - name: Download PyPI wheels
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: pypi-*
+          path: dist/artifacts/pypi
+          merge-multiple: true
+      - name: Download native SDKs
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: native-sdk-*
+          path: dist/artifacts/native
+          merge-multiple: true
+      - name: Download npm package
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: npm-package
+          path: dist/artifacts/npm
+      - name: Download Cargo packages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: cargo-packages
+          path: dist/artifacts/cargo
+      - name: Generate unified release evidence
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          python tools/generate_release_evidence.py dist/artifacts \
+            --output-dir dist/evidence \
+            --version "$RELEASE_VERSION" \
+            --source-uri "${{ github.server_url }}/${{ github.repository }}"
+      - name: Attest release artifact provenance
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: |
+            dist/artifacts/**/*.whl
+            dist/artifacts/**/*.zip
+            dist/artifacts/**/*.tgz
+            dist/artifacts/**/*.crate
+      - name: Attest release SBOM
+        uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f # v3
+        with:
+          subject-path: |
+            dist/artifacts/**/*.whl
+            dist/artifacts/**/*.zip
+            dist/artifacts/**/*.tgz
+            dist/artifacts/**/*.crate
+          sbom-path: dist/evidence/nexaloid-release.spdx.json
+      - name: Upload release evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: release-evidence
+          path: dist/evidence/*
+
   github-release:
     name: Publish GitHub release assets
-    if: github.event_name != 'workflow_dispatch' || inputs.publish_native_sdk
     runs-on: ubuntu-latest
-    needs: native-sdk-build
+    needs: [native-sdk-build, release-evidence]
+    if: >-
+      always() &&
+      (github.event_name != 'workflow_dispatch' || inputs.publish_native_sdk) &&
+      needs.native-sdk-build.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || needs.release-evidence.result == 'success')
     permissions:
       contents: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Download native SDK artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: native-sdk-*
           path: dist/native
           merge-multiple: true
+      - name: Download release evidence
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: release-evidence
+          path: dist/evidence
       - name: Upload assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -272,7 +351,11 @@ jobs:
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes
           fi
-          gh release upload "$RELEASE_TAG" dist/native/*.zip --clobber
+          assets=(dist/native/*.zip)
+          if [ -d dist/evidence ]; then
+            assets+=(dist/evidence/SHA256SUMS dist/evidence/nexaloid-release.spdx.json)
+          fi
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
 
   language-release-branches:
     name: Publish language release branches
@@ -283,11 +366,11 @@ jobs:
       contents: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Update release branches
@@ -350,9 +433,9 @@ jobs:
     runs-on: ${{ matrix.target.os }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Set release version
@@ -378,9 +461,9 @@ jobs:
     needs: [ci_gate, rust_portability_smoke]
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Set up Zig
@@ -551,6 +634,17 @@ jobs:
           exit 1
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Collect published Cargo packages
+        shell: bash
+        run: |
+          mkdir -p dist/cargo
+          find bindings/rust -type f -path '*/target/package/*.crate' -exec cp {} dist/cargo/ \;
+          test -n "$(find dist/cargo -maxdepth 1 -name '*.crate' -print -quit)"
+      - name: Upload Cargo package artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: cargo-packages
+          path: dist/cargo/*.crate
 
   npm-build:
     name: Build npm prebuild (${{ matrix.target.platform }})
@@ -566,14 +660,14 @@ jobs:
         working-directory: bindings/node
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
           package-manager-cache: false
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Set release version
@@ -603,7 +697,7 @@ jobs:
       - name: Regression test Node.js binding
         run: npm run test:binding
       - name: Upload npm prebuild
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: npm-${{ matrix.target.platform }}
           path: bindings/node/prebuilds
@@ -621,21 +715,21 @@ jobs:
         working-directory: bindings/node
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Download npm prebuilds
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: npm-*
           path: bindings/node/prebuilds
           merge-multiple: true
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.x"
       - name: Set release version
@@ -671,14 +765,23 @@ jobs:
         run: python ${{ github.workspace }}/tools/npm_package_regression.py
         env:
           NEXALOID_REQUIRE_ALL_PREBUILDS: "1"
+      - name: Build npm release tarball
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist/npm"
+          npm pack --pack-destination "$GITHUB_WORKSPACE/dist/npm"
+      - name: Upload npm package artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: npm-package
+          path: dist/npm/*.tgz
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish "$GITHUB_WORKSPACE"/dist/npm/*.tgz --provenance --access public
 
   release-summary:
     name: Write release summary
     runs-on: ubuntu-latest
     if: always()
-    needs: [ci_gate, pypi, cargo, npm, github-release, language-release-branches, rust_portability_smoke]
+    needs: [ci_gate, pypi, cargo, npm, github-release, release-evidence, language-release-branches, rust_portability_smoke]
     steps:
       - name: Write package results
         run: |
@@ -691,6 +794,7 @@ jobs:
             echo "| Cargo | ${{ needs.cargo.result }} |"
             echo "| Rust clean-directory smoke | ${{ needs.rust_portability_smoke.result }} |"
             echo "| npm | ${{ needs.npm.result }} |"
+            echo "| Checksums, SBOM, provenance | ${{ needs.release-evidence.result }} |"
             echo "| GitHub native SDK | ${{ needs.github-release.result }} |"
             echo "| Language release branches | ${{ needs.language-release-branches.result }} |"
             echo "| CI gate | ${{ needs.ci_gate.result }} |"

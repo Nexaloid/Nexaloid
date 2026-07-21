@@ -2,7 +2,7 @@ package nexaloid
 
 /*
 #cgo CFLAGS: -I../../../core/include
-#cgo windows LDFLAGS: -L../../../core/zig-out/lib -lnexaloid
+#cgo windows LDFLAGS: -L../../../core/zig-out/lib -l:nexaloid.lib
 #cgo linux darwin LDFLAGS: -L../../../core/zig-out/lib -lnexaloid
 #include <stdlib.h>
 #include "nexaloid.h"
@@ -22,8 +22,11 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"unsafe"
 )
+
+var ErrTokenizerClosed = errors.New("tokenizer is closed")
 
 type Mode int
 
@@ -83,6 +86,7 @@ func (token Token) CustomRuleIndex() (uint16, bool) {
 
 type Tokenizer struct {
 	// Opaque native engine handle owned by this Go wrapper.
+	mu     sync.Mutex
 	engine *C.NxEngine
 }
 
@@ -114,6 +118,8 @@ func NewWithOptions(options Options) (*Tokenizer, error) {
 }
 
 func (t *Tokenizer) Close() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	if t.engine != nil {
 		C.nx_engine_free(t.engine)
 		t.engine = nil
@@ -121,6 +127,11 @@ func (t *Tokenizer) Close() {
 }
 
 func (t *Tokenizer) AddWord(word string, score float32) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.ensureOpenLocked(); err != nil {
+		return err
+	}
 	cWord := C.CString(word)
 	defer C.free(unsafe.Pointer(cWord))
 	if status := C.nx_add_word(t.engine, cWord, C.size_t(len([]byte(word))), 0, C.float(score), 0); status != C.NX_OK {
@@ -130,6 +141,15 @@ func (t *Tokenizer) AddWord(word string, score float32) error {
 }
 
 func (t *Tokenizer) LoadPlugin(path string, configJSON string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.ensureOpenLocked(); err != nil {
+		return err
+	}
+	return t.loadPluginLocked(path, configJSON)
+}
+
+func (t *Tokenizer) loadPluginLocked(path string, configJSON string) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	var cConfig *C.char
@@ -144,6 +164,15 @@ func (t *Tokenizer) LoadPlugin(path string, configJSON string) error {
 }
 
 func (t *Tokenizer) LoadRulesJSON(jsonText string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.ensureOpenLocked(); err != nil {
+		return err
+	}
+	return t.loadRulesJSONLocked(jsonText)
+}
+
+func (t *Tokenizer) loadRulesJSONLocked(jsonText string) error {
 	cJSON := C.CString(jsonText)
 	defer C.free(unsafe.Pointer(cJSON))
 	if status := C.nx_load_rules_json(t.engine, cJSON, C.size_t(len([]byte(jsonText)))); status != C.NX_OK {
@@ -161,6 +190,11 @@ func (t *Tokenizer) LoadRules(path string) error {
 }
 
 func (t *Tokenizer) ClearRules() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.ensureOpenLocked(); err != nil {
+		return err
+	}
 	if status := C.nx_clear_rules(t.engine); status != C.NX_OK {
 		return statusError(status)
 	}
@@ -187,8 +221,13 @@ func (t *Tokenizer) LoadPlugins(dir string, configJSON string) error {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.ensureOpenLocked(); err != nil {
+		return err
+	}
 	for _, name := range names {
-		if err := t.LoadPlugin(filepath.Join(dir, name), configJSON); err != nil {
+		if err := t.loadPluginLocked(filepath.Join(dir, name), configJSON); err != nil {
 			return err
 		}
 	}
@@ -196,6 +235,11 @@ func (t *Tokenizer) LoadPlugins(dir string, configJSON string) error {
 }
 
 func (t *Tokenizer) Tokenize(text string, mode Mode) ([]Token, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.ensureOpenLocked(); err != nil {
+		return nil, err
+	}
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 	ctx := callbackContext{text: text}
@@ -204,6 +248,13 @@ func (t *Tokenizer) Tokenize(text string, mode Mode) ([]Token, error) {
 		return nil, statusError(status)
 	}
 	return ctx.tokens, nil
+}
+
+func (t *Tokenizer) ensureOpenLocked() error {
+	if t.engine == nil {
+		return ErrTokenizerClosed
+	}
+	return nil
 }
 
 type callbackContext struct {

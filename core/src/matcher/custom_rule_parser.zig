@@ -9,6 +9,7 @@ const max_custom_rules = defs.max_custom_rules;
 const max_prefixes = defs.max_prefixes;
 const max_prefix_len = defs.max_prefix_len;
 const max_rule_len = defs.max_rule_len;
+const max_sequence_parts = defs.max_sequence_parts;
 
 pub fn parseJson(allocator: std.mem.Allocator, json: []const u8) !std.ArrayListUnmanaged(CustomRule) {
     if (json.len > 1024 * 1024) return error.InvalidRules;
@@ -138,8 +139,9 @@ fn parseSequenceParts(allocator: std.mem.Allocator, object: std.json.ObjectMap, 
         .array => |array| array.items,
         else => return error.InvalidRules,
     };
-    if (items.len == 0 or items.len > 32) return error.InvalidRules;
+    if (items.len == 0 or items.len > max_sequence_parts) return error.InvalidRules;
     try out.ensureTotalCapacity(allocator, items.len);
+    var minimum_total: u32 = 0;
     for (items) |item| {
         const part_obj = objectValue(item) catch return error.InvalidRules;
         var part = SequencePart{ .kind = .digits };
@@ -169,6 +171,11 @@ fn parseSequenceParts(allocator: std.mem.Allocator, object: std.json.ObjectMap, 
         } else {
             return error.InvalidRules;
         }
+        minimum_total = std.math.add(u32, minimum_total, switch (part.kind) {
+            .literal => @intCast(part.literal.len),
+            .digits, .charset => part.min_len,
+        }) catch return error.InvalidRules;
+        if (minimum_total > max_rule_len) return error.InvalidRules;
         out.appendAssumeCapacity(part);
     }
 }

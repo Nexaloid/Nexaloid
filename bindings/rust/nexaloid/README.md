@@ -53,13 +53,19 @@ when `load_plugin` initializes that plugin.
 ## Usage
 
 ```rust
-use nexaloid::{Mode, Source, Tokenizer};
+use nexaloid::{Config, Mode, Source, Tokenizer};
 
 fn main() -> Result<(), nexaloid::Error> {
     let tokenizer = Tokenizer::new_default()?;
     let tokens = tokenizer.tokenize("南京市长江大桥", Mode::Accurate)?;
     let search = tokenizer.tokenize("南京市长江大桥", Mode::Search)?;
     let recall = tokenizer.tokenize("南京市长江大桥", Mode::RecallSearch)?;
+
+    let config = Config::new()
+        .dict_path("custom.nxdict")
+        .preserve_whitespace(true);
+    let custom = Tokenizer::new(&config)?;
+    drop(custom);
 
     for token in tokens {
         println!("{} {}..{} {} flags={}", token.text, token.start_byte, token.end_byte, token.source.as_str(), token.flags);
@@ -78,7 +84,7 @@ fn main() -> Result<(), nexaloid::Error> {
 
 `Token::source` uses the public `Source` enum. `Source::as_str()` returns its stable name and `Source::raw()` preserves the ABI value, including `Source::Unrecognized`. `Token::custom_rule_index()` returns the custom rule's 1-based JSON array index when `source` is `Source::Rule` and `flags` is nonzero.
 
-Whitespace tokens are filtered by default; use `Tokenizer::new_default_with_whitespace(true)` or set `NxConfig.preserve_whitespace = 1`.
+Whitespace tokens are filtered by default; use `Tokenizer::new_default_with_whitespace(true)` or `Config::preserve_whitespace(true)`. The raw `nexaloid_sys::NxConfig` constructor is available only through unsafe `Tokenizer::from_raw_config` because its string pointers are caller-owned.
 
 ## Development
 

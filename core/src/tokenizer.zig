@@ -41,6 +41,14 @@ pub const Tokenizer = struct {
         try self.user_trie.insert(word, word_id, score, pos_id);
     }
 
+    pub fn cloneUserTrie(self: *const Tokenizer) !trie_mod.TempTrie {
+        return self.user_trie.cloneDynamic();
+    }
+
+    pub fn swapUserTrie(self: *Tokenizer, replacement: *trie_mod.TempTrie) void {
+        std.mem.swap(trie_mod.TempTrie, &self.user_trie, replacement);
+    }
+
     pub fn loadRulesJson(self: *Tokenizer, json: []const u8) !void {
         try self.custom_rules.loadJson(json);
     }

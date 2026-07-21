@@ -1,7 +1,7 @@
 use nexaloid_sys as sys;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -148,6 +148,34 @@ impl Token {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct Config {
+    dict_path: Option<PathBuf>,
+    user_dict_path: Option<PathBuf>,
+    preserve_whitespace: bool,
+}
+
+impl Config {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn dict_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.dict_path = Some(path.into());
+        self
+    }
+
+    pub fn user_dict_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.user_dict_path = Some(path.into());
+        self
+    }
+
+    pub fn preserve_whitespace(mut self, preserve: bool) -> Self {
+        self.preserve_whitespace = preserve;
+        self
+    }
+}
+
 pub struct Tokenizer {
     // Safe wrapper around the opaque C engine pointer.
     engine: *mut sys::NxEngine,
@@ -159,22 +187,51 @@ impl Tokenizer {
     }
 
     pub fn new_default_with_whitespace(preserve_whitespace: bool) -> Result<Self, Error> {
-        let dict =
-            CString::new(sys::bundled_dict_path().to_string_lossy().as_bytes()).map_err(|_| {
-                Error {
-                    status: sys::NxStatus::InvalidConfig,
-                    message: "bundled dictionary path contains NUL".to_string(),
-                }
-            })?;
-        let config = sys::NxConfig {
-            dict_path: dict.as_ptr(),
-            preserve_whitespace: u32::from(preserve_whitespace),
-            ..Default::default()
-        };
-        Self::new(config)
+        let config = Config::new()
+            .dict_path(sys::bundled_dict_path())
+            .preserve_whitespace(preserve_whitespace);
+        Self::new(&config)
     }
 
-    pub fn new(config: sys::NxConfig) -> Result<Self, Error> {
+    pub fn new(config: &Config) -> Result<Self, Error> {
+        let dict_path = config
+            .dict_path
+            .as_deref()
+            .map(|path| path_to_cstring("dict_path", path))
+            .transpose()?;
+        let user_dict_path = config
+            .user_dict_path
+            .as_deref()
+            .map(|path| path_to_cstring("user_dict_path", path))
+            .transpose()?;
+        let raw = sys::NxConfig {
+            dict_path: dict_path
+                .as_ref()
+                .map_or(std::ptr::null(), |path| path.as_ptr()),
+            user_dict_path: user_dict_path
+                .as_ref()
+                .map_or(std::ptr::null(), |path| path.as_ptr()),
+            preserve_whitespace: u32::from(config.preserve_whitespace),
+            ..Default::default()
+        };
+        // SAFETY: both optional C strings remain alive for the synchronous constructor call.
+        unsafe { Self::from_raw_config(raw) }
+    }
+
+    /// Creates a tokenizer from the low-level C ABI configuration.
+    ///
+    /// # Safety
+    ///
+    /// Every non-null pointer in `config` must reference a valid NUL-terminated string for the
+    /// duration of this call. Reserved fields must satisfy the current C ABI contract.
+    ///
+    /// ```compile_fail
+    /// use nexaloid::Tokenizer;
+    ///
+    /// let raw = nexaloid_sys::NxConfig::default();
+    /// let _ = Tokenizer::from_raw_config(raw);
+    /// ```
+    pub unsafe fn from_raw_config(config: sys::NxConfig) -> Result<Self, Error> {
         ensure_runtime_compatible()?;
         let mut engine = std::ptr::null_mut();
         check(unsafe { sys::nx_engine_new(&config, &mut engine) })?;
@@ -298,6 +355,17 @@ impl Tokenizer {
         })?;
         Ok(out)
     }
+}
+
+fn path_to_cstring(field: &str, path: &Path) -> Result<CString, Error> {
+    let value = path.to_str().ok_or_else(|| Error {
+        status: sys::NxStatus::InvalidConfig,
+        message: format!("{field} is not valid UTF-8"),
+    })?;
+    CString::new(value).map_err(|_| Error {
+        status: sys::NxStatus::InvalidConfig,
+        message: format!("{field} contains NUL"),
+    })
 }
 
 impl Drop for Tokenizer {

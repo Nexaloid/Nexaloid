@@ -10,6 +10,7 @@ pub const rule_count = rule_config.rule_count;
 pub const all_rules_mask = rule_config.all_rules_mask;
 pub const default_scores = rule_config.default_scores;
 pub const ruleBit = rule_config.ruleBit;
+const max_custom_match_states = 1_000_000;
 
 pub const CustomRule = custom_rules.CustomRule;
 pub const CustomRuleKind = custom_rules.CustomRuleKind;
@@ -25,6 +26,7 @@ pub fn matchAllConfig(chars: []const types.NxChar, config: *const RuleConfig, ct
 }
 
 pub fn matchAllConfigCustom(chars: []const types.NxChar, config: *const RuleConfig, custom_rules_config: ?*const CustomRules, ctx: anytype, comptime emit: anytype) !void {
+    var custom_match_budget: usize = max_custom_match_states;
     var i: usize = 0;
     while (i < chars.len) {
         if (builtin_rules.structuredMatch(chars, i)) |matched| {
@@ -36,7 +38,7 @@ pub fn matchAllConfigCustom(chars: []const types.NxChar, config: *const RuleConf
         }
 
         if (custom_rules_config) |rules| {
-            try custom_rules.emitAll(chars, rules, i, ctx, emit);
+            try custom_rules.emitAll(chars, rules, i, &custom_match_budget, ctx, emit);
         }
 
         if (!config.isEnabled(.ascii_term) or !builtin_rules.isAsciiTermChar(chars[i])) {

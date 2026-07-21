@@ -4,6 +4,8 @@ import os
 import sys
 import hashlib
 import tempfile
+import threading
+import time
 import warnings
 from importlib import metadata
 from pathlib import Path
@@ -25,11 +27,12 @@ if str(ROOT / "tools") not in sys.path:
 
 from nexaloid import Mode, Tokenizer  # noqa: E402
 import nexaloid.compat_jieba as compat_jieba  # noqa: E402
-from nexaloid.tokenizer import _resolve_dict_path  # noqa: E402
+import nexaloid.tokenizer as tokenizer_module  # noqa: E402
+from nexaloid.tokenizer import _resolve_dict_path, _resolve_domain_dict_path  # noqa: E402
 from nexaloid.tokenizer import NexaloidError  # noqa: E402
 from check_hmm_artifact import main as check_hmm_artifact_main  # noqa: E402
 from hmm_score_audit import main as hmm_score_audit_main  # noqa: E402
-from nxdict_builder import build as build_nxdict  # noqa: E402
+from nxdict_builder import MAX_LINE_BYTES, build as build_nxdict, read_rows as read_nxdict_rows  # noqa: E402
 from plugin_integration_checks import build_hmm_plugin, hmm_plugin_name, main as plugin_integration_main  # noqa: E402
 from rule_audit import main as rule_audit_main  # noqa: E402
 
@@ -63,6 +66,98 @@ def check_python_close_guard() -> None:
     expect_error(lambda: tokenizer.tokenize("南京市长江大桥"), "closed")
     expect_error(lambda: tokenizer.add_word("测试"), "closed")
     expect_error(lambda: tokenizer.load_userdict("missing.tsv"), "closed")
+
+
+def check_python_constructor_cleanup() -> None:
+    original_apply = Tokenizer._apply_custom_rules
+    original_free = tokenizer_module._LIB.nx_engine_free
+    freed = []
+
+    def fail_rules(self, engine):
+        del self, engine
+        raise RuntimeError("injected rule failure")
+
+    def track_free(engine):
+        freed.append(engine.value)
+        original_free(engine)
+
+    Tokenizer._apply_custom_rules = fail_rules
+    tokenizer_module._LIB.nx_engine_free = track_free
+    try:
+        expect_error(Tokenizer, "injected rule failure")
+        assert len(freed) == 1 and freed[0] is not None
+    finally:
+        Tokenizer._apply_custom_rules = original_apply
+        tokenizer_module._LIB.nx_engine_free = original_free
+
+
+def check_python_callback_exception_propagation() -> None:
+    original_token = tokenizer_module.Token
+
+    class CallbackFailure(RuntimeError):
+        pass
+
+    def fail_token(**kwargs):
+        del kwargs
+        raise CallbackFailure("injected callback failure")
+
+    tokenizer = Tokenizer()
+    tokenizer_module.Token = fail_token
+    try:
+        expect_error(lambda: tokenizer.tokenize("南京市长江大桥"), "injected callback failure")
+        expect_error(
+            lambda: tokenizer.tokenize_batch(["南京市长江大桥"], thread_count=1),
+            "injected callback failure",
+        )
+    finally:
+        tokenizer_module.Token = original_token
+        tokenizer.close()
+
+
+def check_python_concurrent_close() -> None:
+    tokenizer = Tokenizer()
+    start = threading.Barrier(9)
+    unexpected = []
+
+    def tokenize_worker() -> None:
+        start.wait()
+        for _ in range(25):
+            try:
+                tokenizer.tokenize("南京市长江大桥")
+            except NexaloidError as exc:
+                if "closed" not in str(exc):
+                    unexpected.append(exc)
+                return
+            except BaseException as exc:
+                unexpected.append(exc)
+                return
+
+    threads = [threading.Thread(target=tokenize_worker) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    start.wait()
+    tokenizer.close()
+    for thread in threads:
+        thread.join()
+    assert not unexpected, unexpected
+
+
+def check_domain_dict_path_guard() -> None:
+    old_root = os.environ.get("NEXALOID_DOMAIN_DICT_DIR")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            finance = root / "finance.tsv"
+            finance.write_text("金融词\t10\n", encoding="utf-8")
+            os.environ["NEXALOID_DOMAIN_DICT_DIR"] = str(root)
+            assert _resolve_domain_dict_path("finance") == finance.resolve()
+            for value in ("../outside", "nested/name", "x" * 65, ""):
+                expect_error(lambda value=value: _resolve_domain_dict_path(value), "domain")
+    finally:
+        if old_root is None:
+            os.environ.pop("NEXALOID_DOMAIN_DICT_DIR", None)
+        else:
+            os.environ["NEXALOID_DOMAIN_DICT_DIR"] = old_root
 
 
 def check_python_hmm_default_off() -> None:
@@ -242,6 +337,33 @@ def check_python_rule_config() -> None:
         tokenizer.close()
 
 
+def check_adversarial_literal_sequence_bounded() -> None:
+    parts = [{"charset": "a", "min": 1, "max": 40} for _ in range(20)]
+    parts.append({"literal": "X"})
+    tokenizer = Tokenizer(
+        rule_config={
+            "custom_rules": [
+                {
+                    "name": "adversarial",
+                    "kind": "literal_sequence",
+                    "boundary": "none",
+                    "parts": parts,
+                    "score": 10,
+                }
+            ]
+        }
+    )
+    try:
+        started = time.perf_counter()
+        tokens = tokenizer.tokenize("a" * 40 + "Y")
+        elapsed = time.perf_counter() - started
+        assert all(not (token.source == "rule" and token.flags == 1) for token in tokens)
+        assert elapsed < 1.0, f"adversarial literal_sequence took {elapsed:.3f}s"
+        print(f"literal_sequence_adversarial_ms={elapsed * 1000:.3f}")
+    finally:
+        tokenizer.close()
+
+
 def check_search_vs_recall_search() -> None:
     tokenizer = Tokenizer()
     try:
@@ -343,6 +465,36 @@ def check_python_hmm_true_enabled() -> None:
                 os.environ["NEXALOID_HMM_PLUGIN"] = old_plugin
 
 
+def check_nxdict_builder_rejects_invalid_rows() -> None:
+    cases = (
+        ("\t10\n", "empty word"),
+        ("词\tnot-a-number\n", "invalid score"),
+        ("词\tnan\n", "finite float32"),
+        ("词\t10\n词\t20\n", "duplicate word"),
+        (f"{'x' * 65536}\t10\n", "word exceeds"),
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for index, (content, expected) in enumerate(cases):
+            source = root / f"invalid-{index}.tsv"
+            output = root / f"invalid-{index}.nxdict"
+            source.write_text(content, encoding="utf-8")
+            expect_error(lambda source=source, output=output: build_nxdict(source, output), expected)
+            assert not output.exists()
+
+        invalid_utf8 = root / "invalid-utf8.tsv"
+        invalid_utf8.write_bytes(b"valid\t1\n\xff\n")
+        expect_error(lambda: list(read_nxdict_rows(invalid_utf8)), ":2: invalid UTF-8")
+
+        overlong = root / "overlong.tsv"
+        overlong.write_bytes(b"x" * (MAX_LINE_BYTES + 1))
+        expect_error(lambda: list(read_nxdict_rows(overlong)), ":1: line exceeds")
+
+        default_score = root / "default-score.tsv"
+        default_score.write_bytes("兼容词\t\n".encode("utf-8"))
+        assert list(read_nxdict_rows(default_score))[0][2] == 1.0
+
+
 def check_rust_sys_hmm_artifact_synced() -> None:
     root_artifact = ROOT / "data" / "hmm" / "bmes_hmm_wordhub_lattice.nxhmm"
     rust_artifact = ROOT / "bindings" / "rust" / "nexaloid-sys" / "data" / "hmm" / root_artifact.name
@@ -365,15 +517,21 @@ def main() -> int:
     os.environ.setdefault("PYTHONUTF8", "1")
     checks = [
         check_python_close_guard,
+        check_python_constructor_cleanup,
+        check_python_callback_exception_propagation,
+        check_python_concurrent_close,
+        check_domain_dict_path_guard,
         check_python_hmm_default_off,
         check_jieba_unsupported_options,
         check_invalid_mode,
         check_nxdict_userdict,
+        check_nxdict_builder_rejects_invalid_rows,
         check_del_word_falls_back,
         check_del_word_base_falls_back,
         check_token_coverage,
         check_traditional_mixed_text,
         check_python_rule_config,
+        check_adversarial_literal_sequence_bounded,
         check_search_vs_recall_search,
         check_whitespace_option,
         check_version_exported,

@@ -4,7 +4,9 @@ import ctypes
 import json
 import math
 import os
+import re
 import sys
+import threading
 import warnings
 from enum import IntEnum
 from pathlib import Path
@@ -159,15 +161,22 @@ def entity_manifest() -> dict:
 def _resolve_domain_dict_path(domain: str | None) -> Path | None:
     if domain is None:
         return None
+    if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", domain) is None:
+        raise ValueError("domain must contain only letters, digits, underscores, and hyphens")
     domain_dir = os.environ.get("NEXALOID_DOMAIN_DICT_DIR")
     if not domain_dir:
         raise ValueError("domain requires NEXALOID_DOMAIN_DICT_DIR")
 
-    root = Path(domain_dir)
+    root = Path(domain_dir).resolve(strict=True)
     for suffix in (".nxdict", ".tsv", ".txt"):
         candidate = root / f"{domain}{suffix}"
-        if candidate.exists():
-            return candidate
+        if candidate.is_file():
+            resolved = candidate.resolve(strict=True)
+            try:
+                resolved.relative_to(root)
+            except ValueError as exc:
+                raise ValueError("domain dictionary resolves outside NEXALOID_DOMAIN_DICT_DIR") from exc
+            return resolved
     raise FileNotFoundError(f"domain dictionary not found: {root / (domain + '.tsv')}")
 
 
@@ -390,6 +399,18 @@ class Tokenizer:
         rule_config: dict | None = None,
         preserve_whitespace: bool = False,
     ):
+        self._lock = threading.RLock()
+        self._closed = False
+        self._engine = ctypes.c_void_p()
+        self._hmm_engine: ctypes.c_void_p | None = None
+        self._hmm_plugin_path: Path | None = None
+        self._hmm_config_json: str | None = None
+        self._hmm_ready = False
+        self._plugins_loaded = False
+        self._hmm_search_cache: dict[str, tuple[tuple[int, str], ...]] = {}
+        self._words: dict[str, float] = {}
+        self._deleted: set[str] = set()
+
         resolved_dict = _resolve_dict_path(dict_path)
         resolved_domain_dict = _resolve_domain_dict_path(domain)
         self._dict_path = resolved_dict if resolved_dict.exists() else None
@@ -398,17 +419,12 @@ class Tokenizer:
         self._rules_json = _custom_rules_json(rule_config)
         self._preserve_whitespace = bool(preserve_whitespace)
         self._engine = self._open_engine()
-        self._hmm_engine: ctypes.c_void_p | None = None
-        self._hmm_plugin_path: Path | None = None
-        self._hmm_config_json: str | None = None
-        self._hmm_ready = False
-        self._plugins_loaded = False
-        self._hmm_search_cache: dict[str, tuple[tuple[int, str], ...]] = {}
-        self._closed = False
-        self._words: dict[str, float] = {}
-        self._deleted: set[str] = set()
-        if plugin_dir is not None:
-            self.load_plugins(plugin_dir, plugin_config_json)
+        try:
+            if plugin_dir is not None:
+                self.load_plugins(plugin_dir, plugin_config_json)
+        except BaseException:
+            self.close()
+            raise
 
     def _open_engine(self) -> ctypes.c_void_p:
         engine = ctypes.c_void_p()
@@ -421,8 +437,12 @@ class Tokenizer:
             config.user_dict_path = str(resolved_user_dict).encode("utf-8")
         config.preserve_whitespace = 1 if self._preserve_whitespace else 0
         self._check(_LIB.nx_engine_new(ctypes.byref(config), ctypes.byref(engine)))
-        self._apply_rule_config(engine)
-        self._apply_custom_rules(engine)
+        try:
+            self._apply_rule_config(engine)
+            self._apply_custom_rules(engine)
+        except BaseException:
+            _LIB.nx_engine_free(engine)
+            raise
         return engine
 
     def _apply_rule_config(self, engine: ctypes.c_void_p) -> None:
@@ -439,11 +459,14 @@ class Tokenizer:
         self._check(_LIB.nx_load_rules_json(engine, data, len(data)))
 
     def close(self) -> None:
-        if not self._closed:
+        with self._lock:
+            if self._closed:
+                return
             if self._hmm_engine is not None:
                 _LIB.nx_engine_free(self._hmm_engine)
                 self._hmm_engine = None
-            _LIB.nx_engine_free(self._engine)
+            if self._engine.value is not None:
+                _LIB.nx_engine_free(self._engine)
             self._engine = ctypes.c_void_p()
             self._closed = True
 
@@ -454,11 +477,16 @@ class Tokenizer:
             pass
 
     def add_word(self, word: str, freq: float | None = None, tag: str | None = None) -> None:
-        self._ensure_open()
-        if tag is not None:
-            warnings.warn("tag is ignored because Nexaloid does not provide POS tagging", RuntimeWarning, stacklevel=2)
-        score = float(freq if freq is not None else 10.0)
-        self._add_word_score(word, score)
+        with self._lock:
+            self._ensure_open()
+            if not word:
+                raise ValueError("word must not be empty")
+            if tag is not None:
+                warnings.warn("tag is ignored because Nexaloid does not provide POS tagging", RuntimeWarning, stacklevel=2)
+            score = float(freq if freq is not None else 10.0)
+            if not math.isfinite(score):
+                raise ValueError("word score must be finite")
+            self._add_word_score(word, score)
 
     def _add_word_score(self, word: str, score: float) -> None:
         data = word.encode("utf-8")
@@ -470,90 +498,113 @@ class Tokenizer:
         self._hmm_search_cache.clear()
 
     def del_word(self, word: str) -> None:
-        self._ensure_open()
-        self._add_word_score(word, _DELETED_WORD_SCORE)
-        self._deleted.add(word)
+        with self._lock:
+            self._ensure_open()
+            if not word:
+                raise ValueError("word must not be empty")
+            self._add_word_score(word, _DELETED_WORD_SCORE)
+            self._deleted.add(word)
 
     def load_userdict(self, path: str | os.PathLike[str]) -> None:
-        self._ensure_open()
-        resolved = Path(path)
-        self._user_dict_path = resolved
-        data = str(resolved).encode("utf-8")
-        self._check(_LIB.nx_reload_user_dict(self._engine, data))
-        if self._hmm_engine is not None:
-            self._check(_LIB.nx_reload_user_dict(self._hmm_engine, data))
-        self._hmm_search_cache.clear()
+        with self._lock:
+            self._ensure_open()
+            resolved = Path(path)
+            data = str(resolved).encode("utf-8")
+            self._check(_LIB.nx_reload_user_dict(self._engine, data))
+            if self._hmm_engine is not None:
+                self._check(_LIB.nx_reload_user_dict(self._hmm_engine, data))
+            self._user_dict_path = resolved
+            self._hmm_search_cache.clear()
 
     def load_plugin(self, path: str | os.PathLike[str], config_json: str | None = None) -> None:
-        self._ensure_open()
-        path_data = str(Path(path)).encode("utf-8")
-        config_data = None if config_json is None else config_json.encode("utf-8")
-        self._check(_LIB.nx_load_plugin(self._engine, path_data, config_data))
-        self._plugins_loaded = True
+        with self._lock:
+            self._ensure_open()
+            path_data = str(Path(path)).encode("utf-8")
+            config_data = None if config_json is None else config_json.encode("utf-8")
+            self._check(_LIB.nx_load_plugin(self._engine, path_data, config_data))
+            self._plugins_loaded = True
 
     def load_plugins(self, path: str | os.PathLike[str], config_json: str | None = None) -> None:
-        self._ensure_open()
-        for plugin_path in _iter_plugin_paths(path):
-            self.load_plugin(plugin_path, config_json)
+        with self._lock:
+            self._ensure_open()
+            for plugin_path in _iter_plugin_paths(path):
+                self.load_plugin(plugin_path, config_json)
 
     def load_rules_json(self, json_text: str) -> None:
-        self._ensure_open()
-        data = json_text.encode("utf-8")
-        self._check(_LIB.nx_load_rules_json(self._engine, data, len(data)))
-        if self._hmm_engine is not None:
-            self._check(_LIB.nx_load_rules_json(self._hmm_engine, data, len(data)))
-        self._rules_json = json_text
-        self._hmm_search_cache.clear()
+        with self._lock:
+            self._ensure_open()
+            data = json_text.encode("utf-8")
+            self._check(_LIB.nx_load_rules_json(self._engine, data, len(data)))
+            if self._hmm_engine is not None:
+                self._check(_LIB.nx_load_rules_json(self._hmm_engine, data, len(data)))
+            self._rules_json = json_text
+            self._hmm_search_cache.clear()
 
     def load_rules(self, path: str | os.PathLike[str]) -> None:
-        self.load_rules_json(Path(path).read_text(encoding="utf-8"))
+        with self._lock:
+            self.load_rules_json(Path(path).read_text(encoding="utf-8"))
 
     def clear_rules(self) -> None:
-        self._ensure_open()
-        self._check(_LIB.nx_clear_rules(self._engine))
-        if self._hmm_engine is not None:
-            self._check(_LIB.nx_clear_rules(self._hmm_engine))
-        self._rules_json = None
-        self._hmm_search_cache.clear()
+        with self._lock:
+            self._ensure_open()
+            self._check(_LIB.nx_clear_rules(self._engine))
+            if self._hmm_engine is not None:
+                self._check(_LIB.nx_clear_rules(self._hmm_engine))
+            self._rules_json = None
+            self._hmm_search_cache.clear()
 
     def suggest_freq(self, segment, tune: bool = False):
-        word = "".join(segment) if isinstance(segment, tuple) else str(segment)
-        if tune:
-            self.add_word(word, freq=20.0)
-        return self._words.get(word, 0)
+        with self._lock:
+            self._ensure_open()
+            word = "".join(segment) if isinstance(segment, tuple) else str(segment)
+            if tune:
+                self.add_word(word, freq=20.0)
+            return self._words.get(word, 0)
 
     def _tokenize_with_engine(self, engine: ctypes.c_void_p, text: str, mode: Mode = Mode.ACCURATE) -> list[Token]:
-        self._ensure_open()
-        data = text.encode("utf-8")
-        out: list[Token] = []
+        with self._lock:
+            self._ensure_open()
+            data = text.encode("utf-8")
+            out: list[Token] = []
+            callback_error: BaseException | None = None
 
-        @_CALLBACK
-        def on_token(token_ptr, text_ptr, text_len, user_data):
-            del text_ptr, text_len, user_data
-            token = token_ptr.contents
-            part = data[token.start_byte : token.end_byte].decode("utf-8")
-            if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
-                _append_deleted_fallback(out, part, token)
-                return
-            out.append(
-                Token(
-                    text=part,
-                    start_byte=token.start_byte,
-                    end_byte=token.end_byte,
-                    start_char=token.start_char,
-                    end_char=token.end_char,
-                    pos=None,
-                    source=_SOURCES.get(token.source, "unknown"),
-                    score=float(token.score),
-                    flags=int(token.flags),
-                )
-            )
+            @_CALLBACK
+            def on_token(token_ptr, text_ptr, text_len, user_data):
+                nonlocal callback_error
+                del text_ptr, text_len, user_data
+                if callback_error is not None:
+                    return
+                try:
+                    token = token_ptr.contents
+                    part = data[token.start_byte : token.end_byte].decode("utf-8")
+                    if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
+                        _append_deleted_fallback(out, part, token)
+                        return
+                    out.append(
+                        Token(
+                            text=part,
+                            start_byte=token.start_byte,
+                            end_byte=token.end_byte,
+                            start_char=token.start_char,
+                            end_char=token.end_char,
+                            pos=None,
+                            source=_SOURCES.get(token.source, "unknown"),
+                            score=float(token.score),
+                            flags=int(token.flags),
+                        )
+                    )
+                except BaseException as exc:
+                    callback_error = exc
 
-        self._check(_LIB.nx_tokenize(engine, data, len(data), int(mode), on_token, None))
-        return out
+            status = _LIB.nx_tokenize(engine, data, len(data), int(mode), on_token, None)
+            if callback_error is not None:
+                raise callback_error
+            self._check(status)
+            return out
 
     def tokenize(self, text: str, mode: Mode = Mode.ACCURATE) -> list[Token]:
-        return self._tokenize_with_engine(self._engine, text, mode)
+        with self._lock:
+            return self._tokenize_with_engine(self._engine, text, mode)
 
     def tokenize_batch(
         self,
@@ -561,38 +612,45 @@ class Tokenizer:
         mode: Mode = Mode.ACCURATE,
         thread_count: int = 0,
     ) -> list[list[Token]]:
-        self._ensure_open()
-        encoded = [text.encode("utf-8") for text in texts]
-        text_array = (ctypes.c_char_p * len(encoded))(*encoded)
-        len_array = (ctypes.c_size_t * len(encoded))(*(len(item) for item in encoded))
-        out: list[list[Token]] = [[] for _ in encoded]
+        with self._lock:
+            self._ensure_open()
+            encoded = [text.encode("utf-8") for text in texts]
+            text_array = (ctypes.c_char_p * len(encoded))(*encoded)
+            len_array = (ctypes.c_size_t * len(encoded))(*(len(item) for item in encoded))
+            out: list[list[Token]] = [[] for _ in encoded]
+            callback_error: BaseException | None = None
 
-        @_BATCH_CALLBACK
-        def on_token(index, token_ptr, text_ptr, text_len, user_data):
-            del text_ptr, text_len, user_data
-            # Core emits batch callbacks in input order after worker threads finish.
-            raw = encoded[index]
-            token = token_ptr.contents
-            part = raw[token.start_byte : token.end_byte].decode("utf-8")
-            if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
-                _append_deleted_fallback(out[index], part, token)
-                return
-            out[index].append(
-                Token(
-                    text=part,
-                    start_byte=token.start_byte,
-                    end_byte=token.end_byte,
-                    start_char=token.start_char,
-                    end_char=token.end_char,
-                    pos=None,
-                    source=_SOURCES.get(token.source, "unknown"),
-                    score=float(token.score),
-                    flags=int(token.flags),
-                )
-            )
+            @_BATCH_CALLBACK
+            def on_token(index, token_ptr, text_ptr, text_len, user_data):
+                nonlocal callback_error
+                del text_ptr, text_len, user_data
+                if callback_error is not None:
+                    return
+                try:
+                    # Core emits batch callbacks in input order after worker threads finish.
+                    raw = encoded[index]
+                    token = token_ptr.contents
+                    part = raw[token.start_byte : token.end_byte].decode("utf-8")
+                    if token.source == 2 and token.score <= _DELETED_WORD_SCORE:
+                        _append_deleted_fallback(out[index], part, token)
+                        return
+                    out[index].append(
+                        Token(
+                            text=part,
+                            start_byte=token.start_byte,
+                            end_byte=token.end_byte,
+                            start_char=token.start_char,
+                            end_char=token.end_char,
+                            pos=None,
+                            source=_SOURCES.get(token.source, "unknown"),
+                            score=float(token.score),
+                            flags=int(token.flags),
+                        )
+                    )
+                except BaseException as exc:
+                    callback_error = exc
 
-        self._check(
-            _LIB.nx_tokenize_batch(
+            status = _LIB.nx_tokenize_batch(
                 self._engine,
                 text_array,
                 len_array,
@@ -602,13 +660,16 @@ class Tokenizer:
                 on_token,
                 None,
             )
-        )
-        return out
+            if callback_error is not None:
+                raise callback_error
+            self._check(status)
+            return out
 
     def _token_texts(self, text: str, mode: Mode, HMM: bool = False) -> list[str]:
-        if HMM and mode == Mode.ACCURATE:
-            return self._hmm_overlay_texts(text)
-        return [token.text for token in self._tokenize_with_engine(self._engine_for_hmm(HMM), text, mode)]
+        with self._lock:
+            if HMM and mode == Mode.ACCURATE:
+                return self._hmm_overlay_texts(text)
+            return [token.text for token in self._tokenize_with_engine(self._engine_for_hmm(HMM), text, mode)]
 
     def _hmm_overlay_texts(self, text: str) -> list[str]:
         base = self._tokenize_with_engine(self._engine, text, Mode.ACCURATE)
@@ -635,26 +696,31 @@ class Tokenizer:
         return out
 
     def cut(self, text: str, cut_all: bool = False, HMM: bool = False):
-        mode = Mode.FULL if cut_all else Mode.ACCURATE
-        yield from self._token_texts(text, mode, HMM=HMM)
+        with self._lock:
+            words = self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE, HMM=HMM)
+        yield from words
 
     def lcut(self, text: str, cut_all: bool = False, HMM: bool = False) -> list[str]:
-        return self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE, HMM=HMM)
+        with self._lock:
+            return self._token_texts(text, Mode.FULL if cut_all else Mode.ACCURATE, HMM=HMM)
 
     def cut_for_search(self, text: str, HMM: bool = False):
-        candidates = [
-            (token.start_char, token.text)
-            for token in self._tokenize_with_engine(self._engine, text, Mode.SEARCH)
-            if len(token.text) > 1
-        ]
-        if HMM:
-            candidates.extend(self._cached_hmm_search_terms(text))
+        with self._lock:
+            candidates = [
+                (token.start_char, token.text)
+                for token in self._tokenize_with_engine(self._engine, text, Mode.SEARCH)
+                if len(token.text) > 1
+            ]
+            if HMM:
+                candidates.extend(self._cached_hmm_search_terms(text))
 
-        seen: set[str] = set()
-        for _, word in sorted(candidates, key=lambda item: item[0]):
-            if word not in seen:
-                seen.add(word)
-                yield word
+            seen: set[str] = set()
+            words = []
+            for _, word in sorted(candidates, key=lambda item: item[0]):
+                if word not in seen:
+                    seen.add(word)
+                    words.append(word)
+        yield from words
 
     def _cached_hmm_search_terms(self, text: str) -> tuple[tuple[int, str], ...]:
         if len(text) > _MAX_HMM_SEARCH_CHARS:
@@ -697,28 +763,35 @@ class Tokenizer:
                     yield base[start].start_char + local_start, word
 
     def _engine_for_hmm(self, enabled: bool) -> ctypes.c_void_p:
-        if not enabled:
-            return self._engine
-        if self._plugins_loaded:
-            return self._engine
-        if self._hmm_ready and self._hmm_engine is not None:
-            return self._hmm_engine
+        with self._lock:
+            self._ensure_open()
+            if not enabled:
+                return self._engine
+            if self._plugins_loaded:
+                return self._engine
+            if self._hmm_ready and self._hmm_engine is not None:
+                return self._hmm_engine
 
-        plugin_path = _resolve_hmm_plugin_path()
-        if not plugin_path.exists():
-            raise NexaloidError(f"HMM plugin not found: {plugin_path}")
-        config_json = json.dumps({"artifact": str(hmm_artifact_path()), "hmm_score": -14.0})
-        self._hmm_engine = self._open_engine()
-        for word, score in self._words.items():
-            data = word.encode("utf-8")
-            self._check(_LIB.nx_add_word(self._hmm_engine, data, len(data), 0, score, 0))
-        path_data = str(plugin_path).encode("utf-8")
-        config_data = config_json.encode("utf-8")
-        self._check(_LIB.nx_load_plugin(self._hmm_engine, path_data, config_data))
-        self._hmm_plugin_path = plugin_path
-        self._hmm_config_json = config_json
-        self._hmm_ready = True
-        return self._hmm_engine
+            plugin_path = _resolve_hmm_plugin_path()
+            if not plugin_path.exists():
+                raise NexaloidError(f"HMM plugin not found: {plugin_path}")
+            config_json = json.dumps({"artifact": str(hmm_artifact_path()), "hmm_score": -14.0})
+            candidate = self._open_engine()
+            try:
+                for word, score in self._words.items():
+                    data = word.encode("utf-8")
+                    self._check(_LIB.nx_add_word(candidate, data, len(data), 0, score, 0))
+                path_data = str(plugin_path).encode("utf-8")
+                config_data = config_json.encode("utf-8")
+                self._check(_LIB.nx_load_plugin(candidate, path_data, config_data))
+            except BaseException:
+                _LIB.nx_engine_free(candidate)
+                raise
+            self._hmm_engine = candidate
+            self._hmm_plugin_path = plugin_path
+            self._hmm_config_json = config_json
+            self._hmm_ready = True
+            return candidate
 
     def _check(self, status: int) -> None:
         if status != 0:

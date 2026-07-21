@@ -1,5 +1,6 @@
 #pragma once
 
+#include <exception>
 #include <fstream>
 #include <iterator>
 #include <stdexcept>
@@ -139,7 +140,7 @@ public:
 
     std::vector<Token> tokenize(std::string_view text, Mode mode = Mode::Accurate) {
         std::vector<Token> out;
-        CallbackData data{&out};
+        CallbackData data{&out, nullptr};
         // C ABI callbacks are synchronous, so stack-owned CallbackData is safe here.
         NxStatus status = nx_tokenize(
             engine_,
@@ -148,6 +149,9 @@ public:
             static_cast<NxMode>(mode),
             &Tokenizer::on_token,
             &data);
+        if (data.exception) {
+            std::rethrow_exception(data.exception);
+        }
         if (status != NX_OK) {
             throw Error(status);
         }
@@ -165,23 +169,31 @@ public:
 private:
     struct CallbackData {
         std::vector<Token>* out;
+        std::exception_ptr exception;
     };
 
-    static void on_token(const NxToken* token, const char* text, size_t, void* user_data) {
+    static void on_token(const NxToken* token, const char* text, size_t, void* user_data) noexcept {
         auto* data = static_cast<CallbackData*>(user_data);
+        if (data->exception) {
+            return;
+        }
         // Copy token text immediately; the callback text pointer belongs to the native call frame.
-        data->out->push_back(Token{
-            std::string(text + token->start_byte, text + token->end_byte),
-            token->start_byte,
-            token->end_byte,
-            token->start_char,
-            token->end_char,
-            token->word_id,
-            token->pos_id,
-            static_cast<Source>(token->source),
-            token->flags,
-            token->score,
-        });
+        try {
+            data->out->push_back(Token{
+                std::string(text + token->start_byte, text + token->end_byte),
+                token->start_byte,
+                token->end_byte,
+                token->start_char,
+                token->end_char,
+                token->word_id,
+                token->pos_id,
+                static_cast<Source>(token->source),
+                token->flags,
+                token->score,
+            });
+        } catch (...) {
+            data->exception = std::current_exception();
+        }
     }
 
     NxEngine* engine_ = nullptr;

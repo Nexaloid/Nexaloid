@@ -79,6 +79,27 @@ pub const TempTrie = struct {
         node.pos_id = pos_id;
     }
 
+    pub fn cloneDynamic(self: *const TempTrie) !TempTrie {
+        if (self.dat_nodes.len != 0 or self.datCodepoints().len != 0 or self.datBase().len != 0 or self.datCheck().len != 0) {
+            return error.UnsupportedTrieClone;
+        }
+
+        var cloned = TempTrie{ .allocator = self.allocator };
+        errdefer cloned.deinit();
+        try cloned.nodes.ensureTotalCapacity(self.allocator, self.nodes.items.len);
+        for (self.nodes.items) |node| {
+            var cloned_node = Node{
+                .word_id = node.word_id,
+                .score = node.score,
+                .pos_id = node.pos_id,
+            };
+            errdefer cloned_node.children.deinit(self.allocator);
+            try cloned_node.children.appendSlice(self.allocator, node.children.items);
+            cloned.nodes.appendAssumeCapacity(cloned_node);
+        }
+        return cloned;
+    }
+
     pub fn child(self: *const TempTrie, node_index: u32, codepoint: u32) ?u32 {
         if (self.datChild(node_index, codepoint)) |found| return found;
         if (node_index >= self.nodes.items.len) return null;
@@ -94,7 +115,7 @@ pub const TempTrie = struct {
         const check = self.datCheck();
         if (node_index >= base.len) return null;
         const code_id = findCodeId(self.datCodepoints(), codepoint) orelse return null;
-        const next = base[node_index] + code_id;
+        const next = std.math.add(u32, base[node_index], code_id) catch return null;
         if (next >= check.len) return null;
         if (check[next] == node_index + 1) return next;
         return null;
@@ -119,6 +140,7 @@ pub const TempTrie = struct {
         if (self.child(node_index, codepoint)) |found| return found;
         try self.materializeDatNodes();
 
+        if (self.nodes.items.len >= std.math.maxInt(u32)) return error.InputTooLarge;
         const new_index: u32 = @intCast(self.nodes.items.len);
         try self.nodes.append(self.allocator, .{});
         try self.nodes.items[node_index].children.append(self.allocator, .{
@@ -185,4 +207,17 @@ test "temp trie stores utf8 words" {
 
     try std.testing.expectEqual(@as(u32, 7), trie.wordId(n3));
     try std.testing.expectEqual(@as(u16, 2), trie.posId(n3));
+}
+
+test "dynamic trie clone is independent" {
+    var trie = try TempTrie.init(std.testing.allocator);
+    defer trie.deinit();
+    try trie.insert("alpha", 1, 1.0, 0);
+
+    var cloned = try trie.cloneDynamic();
+    defer cloned.deinit();
+    try cloned.insert("beta", 2, 2.0, 0);
+
+    try std.testing.expect(trie.child(0, 'b') == null);
+    try std.testing.expect(cloned.child(0, 'b') != null);
 }

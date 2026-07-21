@@ -16,6 +16,15 @@ const {
 
 const tokenizer = new Tokenizer();
 
+if (!(() => {
+  try {
+    tokenizer.tokenize({});
+    return false;
+  } catch (error) {
+    return error instanceof TypeError && /text must be a string/.test(error.message);
+  }
+})()) throw new Error("tokenize accepted a non-string input");
+
 function assertWords(text, expected) {
   const words = tokenizer.lcut(text);
   if (words.join("/") !== expected.join("/")) {
@@ -77,3 +86,10 @@ preserveTokenizer.close();
 
 console.log("node regression passed");
 tokenizer.close();
+tokenizer.close();
+try {
+  tokenizer.lcut("closed");
+  throw new Error("closed tokenizer accepted lcut");
+} catch (error) {
+  if (!/tokenizer is closed/.test(error.message)) throw error;
+}

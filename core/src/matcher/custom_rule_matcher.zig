@@ -5,16 +5,18 @@ const Boundary = defs.Boundary;
 const CustomRule = defs.CustomRule;
 const SequencePart = defs.SequencePart;
 const max_rule_len = defs.max_rule_len;
+const max_sequence_parts = defs.max_sequence_parts;
 
-pub fn emitAll(chars: []const types.NxChar, rules: []const CustomRule, start: usize, ctx: anytype, comptime emit: anytype) !void {
+pub fn emitAll(chars: []const types.NxChar, rules: []const CustomRule, start: usize, budget: *usize, ctx: anytype, comptime emit: anytype) !void {
     for (rules, 0..) |*rule, index| {
         if (!rule.enabled) continue;
+        try consumeBudget(budget, 1);
         const end = switch (rule.kind) {
             .prefixed_number => prefixedNumberEnd(chars, start, rule),
             .charset_span => charsetSpanEnd(chars, start, rule),
             .ascii_chain => asciiChainEnd(chars, start, rule),
             .number_unit => numberUnitCustomEnd(chars, start, rule),
-            .literal_sequence => literalSequenceEnd(chars, start, rule),
+            .literal_sequence => try literalSequenceEnd(chars, start, rule, budget),
             .contains_span => containsSpanEnd(chars, start, rule),
         } orelse continue;
         if (!boundaryOk(chars, start, end, rule.boundary)) continue;
@@ -72,40 +74,90 @@ fn numberUnitCustomEnd(chars: []const types.NxChar, start: usize, rule: *const C
     return best;
 }
 
-fn literalSequenceEnd(chars: []const types.NxChar, start: usize, rule: *const CustomRule) ?usize {
-    const end = matchSequenceFrom(chars, start, rule.parts.items, 0) orelse return null;
+fn literalSequenceEnd(chars: []const types.NxChar, start: usize, rule: *const CustomRule, budget: *usize) !?usize {
+    const end = try matchSequence(chars, start, rule.parts.items, budget) orelse return null;
     if (end <= start or end - start > max_rule_len) return null;
     return end;
 }
 
-fn matchSequenceFrom(chars: []const types.NxChar, pos: usize, parts: []const SequencePart, index: usize) ?usize {
-    if (index == parts.len) return pos;
-    const part = parts[index];
-    switch (part.kind) {
-        .literal => {
-            if (!startsWithCodepoints(chars, pos, part.literal)) return null;
-            return matchSequenceFrom(chars, pos + part.literal.len, parts, index + 1);
-        },
-        .digits => {
-            var end = pos;
-            while (end < chars.len and end - pos < part.max_len and chars[end].char_class == .digit) : (end += 1) {}
-            const len = end - pos;
-            if (len < part.min_len) return null;
-            return matchSequenceFrom(chars, end, parts, index + 1);
-        },
-        .charset => {
-            var max_end = pos;
-            while (max_end < chars.len and max_end - pos < part.max_len and partInCharset(&part, chars[max_end])) : (max_end += 1) {}
-            if (max_end - pos < part.min_len) return null;
-            var len = max_end - pos;
-            while (len >= part.min_len) {
-                if (matchSequenceFrom(chars, pos + len, parts, index + 1)) |end| return end;
-                if (len == part.min_len) break;
-                len -= 1;
-            }
-            return null;
-        },
+fn matchSequence(chars: []const types.NxChar, start: usize, parts: []const SequencePart, budget: *usize) !?usize {
+    if (parts.len == 0 or parts.len > max_sequence_parts) return null;
+    const span = chars[start..@min(chars.len, start + max_rule_len)];
+    var reachable: [max_sequence_parts + 1][max_rule_len + 1]bool = undefined;
+    @memset(reachable[parts.len][0 .. span.len + 1], true);
+
+    var reverse_index = parts.len;
+    while (reverse_index > 0) {
+        reverse_index -= 1;
+        const part = &parts[reverse_index];
+        const row = reachable[reverse_index][0 .. span.len + 1];
+        @memset(row, false);
+        try consumeBudget(budget, span.len + 1);
+
+        switch (part.kind) {
+            .literal => {
+                for (0..span.len + 1) |pos| {
+                    if (startsWithCodepoints(span, pos, part.literal)) {
+                        row[pos] = reachable[reverse_index + 1][pos + part.literal.len];
+                    }
+                }
+            },
+            .digits => fillFixedGreedyRow(span, part, reachable[reverse_index + 1][0 .. span.len + 1], row),
+            .charset => fillCharsetRow(span, part, reachable[reverse_index + 1][0 .. span.len + 1], row),
+        }
     }
+
+    if (!reachable[0][0]) return null;
+    var pos: usize = 0;
+    for (parts, 0..) |*part, index| {
+        switch (part.kind) {
+            .literal => pos += part.literal.len,
+            .digits => pos = greedyEnd(span, pos, part, false),
+            .charset => {
+                const max_end = greedyEnd(span, pos, part, true);
+                const min_end = pos + part.min_len;
+                var candidate = max_end;
+                while (!reachable[index + 1][candidate]) candidate -= 1;
+                if (candidate < min_end) return null;
+                pos = candidate;
+            },
+        }
+    }
+    return start + pos;
+}
+
+fn fillFixedGreedyRow(span: []const types.NxChar, part: *const SequencePart, next: []const bool, row: []bool) void {
+    for (0..span.len + 1) |pos| {
+        const end = greedyEnd(span, pos, part, false);
+        if (end - pos >= part.min_len) row[pos] = next[end];
+    }
+}
+
+fn fillCharsetRow(span: []const types.NxChar, part: *const SequencePart, next: []const bool, row: []bool) void {
+    var prefix: [max_rule_len + 2]u16 = undefined;
+    prefix[0] = 0;
+    for (next, 0..) |value, pos| prefix[pos + 1] = prefix[pos] + @intFromBool(value);
+
+    for (0..span.len + 1) |pos| {
+        const max_end = greedyEnd(span, pos, part, true);
+        const min_end = pos + @as(usize, part.min_len);
+        if (min_end <= max_end and prefix[max_end + 1] > prefix[min_end]) row[pos] = true;
+    }
+}
+
+fn greedyEnd(span: []const types.NxChar, pos: usize, part: *const SequencePart, charset: bool) usize {
+    var end = pos;
+    while (end < span.len and end - pos < part.max_len) : (end += 1) {
+        if (charset) {
+            if (!partInCharset(part, span[end])) break;
+        } else if (span[end].char_class != .digit) break;
+    }
+    return end;
+}
+
+fn consumeBudget(budget: *usize, amount: usize) !void {
+    if (amount > budget.*) return error.RuleMatchBudgetExceeded;
+    budget.* -= amount;
 }
 
 fn containsSpanEnd(chars: []const types.NxChar, start: usize, rule: *const CustomRule) ?usize {

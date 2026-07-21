@@ -31,6 +31,10 @@ The default tokenizer uses the packaged `data/dict/nexaloid.nxdict`. Pass `dict_
 tokenizer = Tokenizer(dict_path="data/dict/nexaloid.tsv")
 ```
 
+Domain dictionaries use a restricted identifier rather than a path. `domain`
+must match `[A-Za-z0-9_-]{1,64}` and the resolved dictionary must remain below
+`NEXALOID_DOMAIN_DICT_DIR`.
+
 Whitespace tokens are filtered by default. Enable jieba-like whitespace retention when needed:
 
 ```python
@@ -55,6 +59,14 @@ print(list(jieba.cut_for_search("中国科学院计算技术研究所")))
 `Mode.SEARCH` preserves every non-whitespace token on the Accurate path, including single-character and repeated-position tokens, and adds in-boundary Han 2-gram / 3-gram expansions. `Mode.RECALL_SEARCH` also adds explicit lattice candidates. `cut_for_search()` keeps search-term behavior by filtering one-character terms and deduplicating text.
 
 Each token exposes the stable source name in `source` and source-specific metadata in `flags`. For `source == "rule"`, a nonzero `flags` value is the custom rule's 1-based JSON array index. Plugin tokens use `flags` for plugin-defined subtypes.
+
+## Threading and lifecycle
+
+A `Tokenizer` serializes all native calls on that instance, including
+tokenization, mutation, plugin loading, and `close()`. `close()` is idempotent,
+waits for the current call to return, and later operations raise
+`NexaloidError`. Use separate instances when application-level parallelism is
+required.
 
 ## Development
 
