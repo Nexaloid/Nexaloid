@@ -121,7 +121,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y patchelf
-          python -m pip install auditwheel==6.7.0
+          python -m pip install auditwheel==6.4.2
           python -m auditwheel repair bindings/python/dist/*.whl -w bindings/python/wheelhouse
           rm bindings/python/dist/*.whl
           mv bindings/python/wheelhouse/*.whl bindings/python/dist/
