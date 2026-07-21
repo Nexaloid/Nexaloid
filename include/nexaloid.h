@@ -54,10 +54,13 @@ typedef enum {
 } NxRuleId;
 
 #define NX_RULE_ALL_MASK ((uint32_t)((1u << NX_RULE_COUNT) - 1u))
+#define NX_MAX_INPUT_BYTES UINT32_MAX
+#define NX_MAX_RULES_JSON_BYTES (1024u * 1024u)
+#define NX_MAX_BATCH_THREADS 64u
 
 /* Engine configuration. String pointers are owned by the caller and read during init only. */
 typedef struct {
-    /* Main dictionary path. The current loader accepts UTF-8 TSV files. */
+    /* Main dictionary path. The loader accepts UTF-8 text and NXDICT files. */
     const char *dict_path;
     /* User dictionary path, loaded as an overlay into the native trie. */
     const char *user_dict_path;
@@ -65,7 +68,7 @@ typedef struct {
     uint32_t enable_hmm;
     /* Reserved switch for future core normalization. */
     uint32_t enable_normalization;
-    /* Reserved switch for the future plugin system. */
+    /* Reserved compatibility switch; plugins are loaded explicitly. */
     uint32_t enable_plugins;
     /* Preserve pure whitespace tokens in accurate/full modes. Default 0 keeps search/RAG-friendly filtering. */
     uint32_t preserve_whitespace;
@@ -113,10 +116,12 @@ typedef void (*NxBatchTokenCallback)(
 /* Return the native runtime semantic version. The static string must not be freed. */
 const char *nx_runtime_version(void);
 
-/* Create an engine. On success, callers must release it with nx_engine_free. */
+/* Create an engine. On success, callers must release it with nx_engine_free.
+   Configuration strings are borrowed only for this call. */
 NxStatus nx_engine_new(const NxConfig *config, NxEngine **out_engine);
 
-/* Free an engine. NULL is allowed. */
+/* Free an engine. NULL is allowed. The caller must ensure no operation is in
+   progress on the engine. */
 void nx_engine_free(NxEngine *engine);
 
 /* Configure built-in rule matcher behavior. enabled_mask uses 1u << NxRuleId.
@@ -130,7 +135,8 @@ NxStatus nx_set_rule_config(
     size_t score_count
 );
 
-/* Load custom structured rules from JSON. Parsing and validation are owned by
+/* Load custom structured rules from JSON, up to NX_MAX_RULES_JSON_BYTES.
+   Parsing and validation are owned by
    the core so every language binding has identical behavior. Supported v1
    custom kinds are prefixed_number and charset_span. */
 NxStatus nx_load_rules_json(
@@ -146,7 +152,8 @@ NxStatus nx_clear_rules(NxEngine *engine);
    config_json may be NULL. Loaded plugins are released by nx_engine_free. */
 NxStatus nx_load_plugin(NxEngine *engine, const char *plugin_path, const char *config_json);
 
-/* Tokenize one UTF-8 byte slice. text does not need to be NUL-terminated.
+/* Tokenize one UTF-8 byte slice, at most NX_MAX_INPUT_BYTES bytes. text does
+   not need to be NUL-terminated.
    Concurrent tokenization on one engine is allowed when no plugins are loaded.
    With plugins, callers must serialize unless every plugin documents thread
    safety. Do not mutate the engine concurrently with tokenization. */
@@ -159,7 +166,9 @@ NxStatus nx_tokenize(
     void *user_data
 );
 
-/* Tokenize a batch. thread_count 0 lets core choose based on CPU count.
+/* Tokenize a batch of at most UINT32_MAX inputs, each at most
+   NX_MAX_INPUT_BYTES bytes. thread_count 0 lets core choose based on CPU count;
+   explicit and automatic worker counts are capped at NX_MAX_BATCH_THREADS.
    Loading any plugin currently forces one worker because plugin thread safety
    is not part of the ABI. */
 NxStatus nx_tokenize_batch(
@@ -173,12 +182,15 @@ NxStatus nx_tokenize_batch(
     void *user_data
 );
 
-/* Reload a user dictionary overlay. Not safe to run concurrently with tokenization on the same engine.
-   Current implementation appends/overwrites words. */
+/* Reload a user dictionary overlay. Not safe to run concurrently with any
+   operation on the same engine. Text and NXDICT inputs are capped at 512 MiB;
+   text lines are capped at 1 MiB. Validation is transactional: an error leaves
+   the prior user dictionary unchanged. Successful loads append/overwrite words. */
 NxStatus nx_reload_user_dict(NxEngine *engine, const char *user_dict_path);
 
-/* Add a word at runtime. Not safe to run concurrently with tokenization on the same engine.
-   word_id 0 lets core allocate an id. */
+/* Add a non-empty UTF-8 word with a finite score at runtime. word_len must not
+   exceed NX_MAX_INPUT_BYTES. Not safe to run concurrently with any operation
+   on the same engine. word_id 0 lets core allocate an id. */
 NxStatus nx_add_word(
     NxEngine *engine,
     const char *word,
